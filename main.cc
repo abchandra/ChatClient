@@ -7,6 +7,24 @@
 
 #include "main.hh"
 
+void CustomTextEdit::keyPressEvent(QKeyEvent *e)
+{
+	// Handle both Return and Enter Key
+	if (e->key() == Qt::Key_Return || 
+		e->key() == Qt::Key_Enter)
+	{
+		//Emit return pressed signal
+		emit returnPressed();
+		//TODO: Does accepting matter here? No?
+		//e->accept();
+	}
+	else
+	{
+		QTextEdit::keyPressEvent(e);
+	}
+} 
+
+
 ChatDialog::ChatDialog()
 {
 	setWindowTitle("Peerster");
@@ -22,7 +40,9 @@ ChatDialog::ChatDialog()
 	//
 	// You might change this into a read/write QTextEdit,
 	// so that the user can easily enter multi-line messages.
-	textline = new QLineEdit(this);
+
+	//TODO: text-entry box can hold multiple (say 2 or 3) lines
+	textline = new CustomTextEdit(this);
 
 	// Lay out the widgets to appear in the main window.
 	// For Qt widget and layout concepts see:
@@ -32,18 +52,30 @@ ChatDialog::ChatDialog()
 	layout->addWidget(textline);
 	setLayout(layout);
 
-	// Register a callback on the textline's returnPressed signal
+	//EXERCISE 1
+	//TODO: Cleanup 
+	//setFocus: Current reason may be arbitrary?
+	textline->setFocus(Qt::ActiveWindowFocusReason);
+	//Alternative, not as precise:
+	//Change widget order to enter text immediately
+	//QWidget::setTabOrder(textline,textview);
+
+	// Register a callback on the CustomTextEdit's returnPressed signal
 	// so that we can send the message entered by the user.
 	connect(textline, SIGNAL(returnPressed()),
 		this, SLOT(gotReturnPressed()));
+
+
 }
 
+//TODO: Refactor
 void ChatDialog::gotReturnPressed()
 {
+	//Check if re
 	// Initially, just echo the string locally.
 	// Insert some networking code here...
-	qDebug() << "FIX: send message to other peers: " << textline->text();
-	textview->append(textline->text());
+	qDebug() << "FIX: send message to other peers: " << textline->toPlainText();
+	textview->append(textline->toPlainText());
 
 	// Clear the textline to get ready for the next input message.
 	textline->clear();
@@ -85,6 +117,7 @@ int main(int argc, char **argv)
 	// Create an initial chat dialog window
 	ChatDialog dialog;
 	dialog.show();
+
 
 	// Create a UDP network socket
 	NetSocket sock;
