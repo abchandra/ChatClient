@@ -7,8 +7,10 @@
 #include <QKeyEvent>
 #include <QUdpSocket>
 #include <QMap>
+#include <QList>
 #include <QDataStream>
 #include <QHostInfo>
+#include <QList>
 
 typedef QString origindt;
 typedef quint32 seqnodt;
@@ -46,6 +48,17 @@ class NetSocket : public QUdpSocket
 
 
 };
+class Peer
+{
+	public:
+		Peer(QHostAddress s,quint16 p,QString h="")
+		{
+			 sender = s; senderPort = p; host = h;
+		}
+		QHostAddress sender;
+		quint16 senderPort;
+		QString host;
+};
 
 class ChatDialog : public QDialog
 {
@@ -53,11 +66,13 @@ class ChatDialog : public QDialog
 
 	public:
 		ChatDialog();
-
+		void addCliPeers(QStringList);
 
 	public slots:
 		void gotReturnPressed();
 		void gotNewMessage();
+		void sendAntiEntropyStatus();
+		void lookedUp(QHostInfo);
 		
 
 	private:
@@ -67,12 +82,17 @@ class ChatDialog : public QDialog
 		seqnodt seqno;
 		origindt origin;
 		QVariantMap currentrumor;
+		QList<Peer> *peerlist;
+		QMap<QString,quint16> unresolvedhostmap;
 		quint32 generateRandom();
 		void sendRumorMessage(QVariantMap msg);
-		void sendStatusMessage(quint16 senderPort, QHostAddress sender);
+		void sendStatusMessage(quint16 senderPort, 
+			QHostAddress sender = QHostAddress::LocalHost);
 		void writeToSocket(QByteArray data, quint16 port,
 		 QHostAddress host = QHostAddress::LocalHost);
 		QByteArray serializeToByteArray(QVariantMap);
+	
+		quint16 chooseRandomNeighborPort();
 		//The recvdmessage map has origin key
 		//with multiple rumor messages as the
 		//values. Each value is thus a QVMap.
@@ -97,9 +117,3 @@ class ChatDialog : public QDialog
 
 
 #endif // PEERSTER_MAIN_HH
-
-
-/*
-NOTES:
-writeToSocket line 174 needs a destination
-*/
