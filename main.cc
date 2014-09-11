@@ -45,13 +45,15 @@ ChatDialog::ChatDialog()
 	// leaving extra vertical space for the textview widget.
 	//TODO: text-entry box can hold multiple (say 2 or 3) lines
 	textline = new CustomTextEdit(this);
-
+	hostline = new QLineEdit(this);
+	hostline->insert("Enter new host here");
 	// Lay out the widgets to appear in the main window.
 	// For Qt widget and layout concepts see:
 	// http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
 	QVBoxLayout *layout = new QVBoxLayout();
 	layout->addWidget(textview);
 	layout->addWidget(textline);
+	layout->addWidget(hostline);
 	setLayout(layout);
 	//TODO: append hostname to origins
 	qsrand(QDateTime::currentDateTime().toTime_t());
@@ -76,7 +78,7 @@ ChatDialog::ChatDialog()
 	}
 	for (int i=0; i<peerlist->size();++i){
 		Peer p = peerlist->at(i);
-		qDebug()<<"PEERS ARE"<<p.host<<p.senderPort;
+		//qDebug()<<"PEERS ARE"<<p.host<<p.senderPort;
 	}
 
 
@@ -87,12 +89,33 @@ ChatDialog::ChatDialog()
 	// Register a callback on QudpSocket's readyRead signal to 
 	// read pending datagrams.
 	connect(&sock, SIGNAL(readyRead()),this, SLOT(gotNewMessage()));
+	connect(hostline, SIGNAL(returnPressed()),SLOT(addPeer()));
 
 	//Anti-entropy timer
 	// QTimer *entropytimer = new QTimer(this);
 	// connect(entropytimer,SIGNAL(timeout()),this,SLOT(sendAntiEntropyStatus()));
 	// entropytimer->start(10000);
 
+}
+void ChatDialog::addPeer(){
+	
+	QStringList splitlist = (hostline->text()).split(":");
+	//TODO:CLEANUP
+	if (splitlist.size()!=2){
+			qDebug()<<"check cli"<<splitlist;
+			return;
+		}
+		qDebug()<<"LIST IS"<<splitlist;
+		if(QHostAddress(splitlist[0]).isNull()){
+			unresolvedhostmap.insertMulti(splitlist[0],splitlist[1].toUInt());
+			QHostInfo::lookupHost(splitlist[0],this,SLOT(lookedUp(QHostInfo)));
+		}
+		else {
+			peerlist->append(Peer(QHostAddress(splitlist[0]),
+				splitlist[1].toUInt()));
+		}
+	hostline->clear();
+	hostline->insert("Sent.Enter new host here");
 }
 void ChatDialog::addCliPeers(QStringList argvlist){
 	//Get peers from the command line
@@ -205,7 +228,7 @@ void ChatDialog::sendRumorMessage(QVariantMap message){
 		Peer p = peerlist->at(i);
 		qDebug()<<"PEERS ARE"<<p.host<<p.senderPort;
 	}
-	
+
 	Peer randompeer = peerlist->at(generateRandom()%peerlist->size());
 	qDebug()<<"SENDING RUMOR"<<randompeer.host<<randompeer.senderPort;
 	writeToSocket(serializeToByteArray(message),
@@ -230,8 +253,22 @@ void ChatDialog::gotNewMessage()
 	serializedarr->resize(sock.pendingDatagramSize());
 	QHostAddress sender;
   quint16 senderPort;
+ 	//check if this peer is new
+
+
 	sock.readDatagram(serializedarr ->data(),serializedarr->size(),
 	 &sender, &senderPort);
+	 int peerlistsize = peerlist->size();
+ 	int i;
+  for(i=0; i<peerlistsize; ++i) {
+  	if ((peerlist->at(i).sender == sender) && 
+  		(peerlist->at(i).senderPort == senderPort))
+  		break;
+  }
+  if (i==peerlistsize)
+  {
+  	peerlist->append(Peer(sender,senderPort));
+  }
 	QDataStream instream(serializedarr,QIODevice::ReadOnly);
 	QVariantMap map;
 	instream >> map;

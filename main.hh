@@ -73,11 +73,13 @@ class ChatDialog : public QDialog
 		void gotNewMessage();
 		void sendAntiEntropyStatus();
 		void lookedUp(QHostInfo);
+		void addPeer();
 		
 
 	private:
 		QTextEdit *textview; 
 		CustomTextEdit *textline;
+		QLineEdit *hostline;
 		NetSocket sock;
 		seqnodt seqno;
 		origindt origin;
