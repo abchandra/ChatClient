@@ -5,7 +5,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDateTime>
-#include <QTimer>
+
 
 #include "main.hh"
  
@@ -91,11 +91,22 @@ ChatDialog::ChatDialog()
 	connect(&sock, SIGNAL(readyRead()),this, SLOT(gotNewMessage()));
 	connect(hostline, SIGNAL(returnPressed()),SLOT(addPeer()));
 
+	//for timeouts
+	responsetimer =new QTimer(this);
+	connect(responsetimer,SIGNAL(timeout()),this,SLOT(checkReceipt()));
 	//Anti-entropy timer
-	// QTimer *entropytimer = new QTimer(this);
-	// connect(entropytimer,SIGNAL(timeout()),this,SLOT(sendAntiEntropyStatus()));
-	// entropytimer->start(10000);
+	QTimer *entropytimer = new QTimer(this);
+	connect(entropytimer,SIGNAL(timeout()),this,SLOT(sendAntiEntropyStatus()));
+	entropytimer->start(10000);
 
+}
+void ChatDialog::checkReceipt(){
+	if (success==false){
+		success=true;
+		qDebug()<<"TIMEOUT!";
+		if (!currentrumor.isEmpty() && generateRandom()%2==0)
+		 sendRumorMessage(currentrumor);
+			}
 }
 void ChatDialog::addPeer(){
 	
@@ -159,6 +170,7 @@ void ChatDialog::lookedUp(QHostInfo host)
 }
 void ChatDialog::sendAntiEntropyStatus()
 {
+	qDebug()<<"Anti-entropy!";
 	quint16 rumorport = chooseRandomNeighborPort();
 	sendStatusMessage(rumorport);
 }
@@ -231,6 +243,8 @@ void ChatDialog::sendRumorMessage(QVariantMap message){
 
 	Peer randompeer = peerlist->at(generateRandom()%peerlist->size());
 	qDebug()<<"SENDING RUMOR"<<randompeer.host<<randompeer.senderPort;
+	responsetimer->start(2000);
+	success = false;
 	writeToSocket(serializeToByteArray(message),
 		randompeer.senderPort,randompeer.sender);
 }
@@ -249,6 +263,7 @@ void ChatDialog::writeToSocket(QByteArray data, quint16 port,
 //TODO: make message a pointer
 void ChatDialog::gotNewMessage()
 {
+	success = true;
 	QByteArray *serializedarr = new QByteArray();
 	serializedarr->resize(sock.pendingDatagramSize());
 	QHostAddress sender;
@@ -319,7 +334,7 @@ void ChatDialog::gotNewMessage()
 				sendStatusMessage(senderPort,sender);
 			}
 			else {
-				if (!currentrumor.isEmpty() && generateRandom()%3==0)
+				if (!currentrumor.isEmpty() && generateRandom()%2==0)
 					 sendRumorMessage(currentrumor);
 			}
 		}

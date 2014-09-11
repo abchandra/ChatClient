@@ -11,6 +11,7 @@
 #include <QDataStream>
 #include <QHostInfo>
 #include <QList>
+#include <QTimer>
 
 typedef QString origindt;
 typedef quint32 seqnodt;
@@ -74,6 +75,7 @@ class ChatDialog : public QDialog
 		void sendAntiEntropyStatus();
 		void lookedUp(QHostInfo);
 		void addPeer();
+		void checkReceipt();
 		
 
 	private:
@@ -86,6 +88,8 @@ class ChatDialog : public QDialog
 		QVariantMap currentrumor;
 		QList<Peer> *peerlist;
 		QMap<QString,quint16> unresolvedhostmap;
+		QTimer *responsetimer;
+		bool success;
 		quint32 generateRandom();
 		void sendRumorMessage(QVariantMap msg);
 		void sendStatusMessage(quint16 senderPort, 
