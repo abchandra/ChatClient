@@ -1,3 +1,11 @@
+/***********************************
+Abhishek Chandra
+CPSC 426 lab1 
+09/12/2014
+
+A basic Peerster implementation
+************************************/
+
 #ifndef PEERSTER_MAIN_HH
 #define PEERSTER_MAIN_HH
 
@@ -21,8 +29,7 @@ class CustomTextEdit : public QTextEdit
 {
 	Q_OBJECT
 	public:
-		CustomTextEdit(QWidget* parent = 0):
-			QTextEdit(parent = 0){} 
+		CustomTextEdit(QWidget* parent = 0): QTextEdit(parent = 0){} 
 	protected:
 		void keyPressEvent(QKeyEvent* event);
 	signals:
@@ -35,21 +42,11 @@ class NetSocket : public QUdpSocket
 
 	public:
 		NetSocket();
-
-		// Bind this socket to a Peerster-specific default port.
-		bool bind();
-		int getmyPortMin(){return myPortMin;}
-		int getmyPortMax(){return myPortMax;}
-		int myPortMin, myPortMax, myPort;	//TODO: Privatize
+		bool bind();																//bind to default port
+		int myPortMin, myPortMax, myPort;
 		QString readNewDatagram();
-		//void incrementSeqno();
-		//quint32 getSeqno(){return seqno;}
-	private:
-		// public slots:
-
-
 };
-class Peer
+class Peer 																			//Holds information for a peer
 {
 	public:
 		Peer(QHostAddress s,quint16 p,QString h="")
@@ -60,66 +57,51 @@ class Peer
 		quint16 senderPort;
 		QString host;
 };
-
+//Main class for peerster instance
 class ChatDialog : public QDialog
 {
 	Q_OBJECT
 
 	public:
 		ChatDialog();
-		void addCliPeers(QStringList);
-
+		void addPeers(QStringList);		//Add peers entered as formatter strings
 	public slots:
-		void gotReturnPressed();
-		void gotNewMessage();
-		void sendAntiEntropyStatus();
-		void lookedUp(QHostInfo);
-		void addPeer();
-		void checkReceipt();
+		void gotReturnPressed();			//Handles delivery of rumors orignating here
+		void gotNewMessage();					//Handles readyRead() for incoming datagrams
+		void sendAntiEntropyStatus();	//Implementation of anti-entropy
+		void lookedUp(QHostInfo);			//Handles completed DNS lookups
+		void addPeer();								//Add a new peer to  peerlist
+		void checkReceipt();					//Implements timeouts against
+																	// non-responsive peers
 		
 
 	private:
-		QTextEdit *textview; 
-		CustomTextEdit *textline;
-		QLineEdit *hostline;
-		NetSocket sock;
-		seqnodt seqno;
-		origindt origin;
-		QVariantMap currentrumor;
-		QList<Peer> *peerlist;
-		QMap<QString,quint16> unresolvedhostmap;
-		QTimer *responsetimer;
-		bool success;
-		quint32 generateRandom();
-		void sendRumorMessage(QVariantMap msg);
-		void sendStatusMessage(quint16 senderPort, 
-			QHostAddress sender = QHostAddress::LocalHost);
-		void writeToSocket(QByteArray data, quint16 port,
-		 QHostAddress host = QHostAddress::LocalHost);
-		QByteArray serializeToByteArray(QVariantMap);
-	
-		quint16 chooseRandomNeighborPort();
-		//The recvdmessage map has origin key
-		//with multiple rumor messages as the
-		//values. Each value is thus a QVMap.
-		//QVMap<"origin",QVMap(rumor message)>
+		QTextEdit *textview; 					//Main display view for rumors sent and rcvd
+		CustomTextEdit *textline;			//Text edit to enter new rumors
+		QLineEdit *hostline;					//Line edit to enter new peers
+		NetSocket sock;								//Netsocket instance to bind to a port
+		seqnodt seqno;								//The counter for rumors sent by instance
+		origindt origin;							//Our random origin key
+		QVariantMap currentrumor;			//Current rumor for rumor-mongering
+		QList<Peer> *peerlist;				//list of known peers
+		QMap<QString,quint16> unresolvedhostmap; //Hosts currently being lookedup
+		QTimer *responsetimer;				//Timer for timeouts on unresponsive peer		
+		bool success;									//verify if a response was rcvd before timeout			
+		void sendRumorMessage(QVariantMap);	//Implementation of rumormongering
+		void sendStatusMessage(quint16 senderPort, 				//Send status message to
+			QHostAddress sender = QHostAddress::LocalHost);	//specified peer
+		void writeToSocket(QByteArray data, quint16 port,	//Calls writeDatagram with
+		 QHostAddress host = QHostAddress::LocalHost);		//a default host
+		QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
+		Peer chooseRandomPeer();	//Selects a random peer
+		
+		
+		//The recvdmessage map has origin key with multiple rumor messages as the
+		//values. Each value is thus a QVMap: QVMap<"origin",QVMap(rumor message)>
 		QVariantMap recvdmessagemap;
-		//The status map has origin keys with
-		//a quint32 sequence to track the last
-		//read message from origin.
-		//QVMap<"origin",seqno>
+		//The status map has origin keys with a quint32 sequence to track the last
+		//read message from origin. QVMap<"origin",seqno>
 		QVariantMap statusmap;
 	};
-
-// class MessageMap
-// {
-// 	public :
-// 		MessageMap();
-// 	private :
-// 		QVariantMap message;
-// 	public	:
-// }
-
-
 
 #endif // PEERSTER_MAIN_HH
