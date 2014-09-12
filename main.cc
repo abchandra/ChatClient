@@ -121,15 +121,22 @@ void ChatDialog::addPeers(QStringList argvlist){
 	for (int i=0; i<argc; i++) {
 		QStringList splitlist = argvlist[i].split(":");	//"host:port"|"ipadd:port"
 		if (splitlist.size()!=2){												//Check Format
+			qDebug()<<"Invalid format. Use host:port or ip:port";
+			return;
+		}
+		bool isokay;
+		quint16 newPort = splitlist[1].toUInt(&isokay);				
+		if (!isokay){																	//Check for conversion errors
+			qDebug()<<"Invalid format. Port is not numeric";
 			return;
 		}
 		if(QHostAddress(splitlist[0]).isNull()){	//Check if convertable to ip
-			unresolvedhostmap.insertMulti(splitlist[0],splitlist[1].toUInt());
+			unresolvedhostmap.insertMulti(splitlist[0],newPort);
 			QHostInfo::lookupHost(splitlist[0],this,SLOT(lookedUp(QHostInfo)));
 		}
 		else																		 //ip usable. Insert as is.
 			peerlist->append(Peer(QHostAddress(splitlist[0]),
-				splitlist[1].toUInt()));
+				newPort));
 	}
 }
 void ChatDialog::lookedUp(QHostInfo host)
@@ -157,7 +164,7 @@ void ChatDialog::sendAntiEntropyStatus()
 	if (!peerlist->size())
 		return;
 	Peer randompeer = chooseRandomPeer();
-	qDebug()<<"Anti-entropy!"<<randompeer.host<<randompeer.senderPort;
+	qDebug()<<"Anti-entropy:"<<randompeer.host<<randompeer.senderPort;
 	sendStatusMessage(randompeer.senderPort,randompeer.sender);
 }
 
@@ -275,7 +282,6 @@ void ChatDialog::gotNewMessage()
 						continue;
 					}
 					if (message.value(SEQ_KEY).toUInt() == incomingseqno) {
-						qDebug()<<"RUMORING to lagger"<<message<<senderPort<<sender;
 						writeToSocket(serializeToByteArray(message), senderPort, sender);
 						break;
 					}
