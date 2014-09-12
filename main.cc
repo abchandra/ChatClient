@@ -5,9 +5,6 @@ CPSC 426 lab1
 
 A basic Peerster implementation
 ************************************/
-
-
-
 #include <unistd.h>
 
 #include <QVBoxLayout>
@@ -15,9 +12,7 @@ A basic Peerster implementation
 #include <QDebug>
 #include <QDateTime>
 
-
 #include "main.hh"
- 
 
 #define CHAT_KEY "ChatText"
 #define ORIGIN_KEY "Origin"
@@ -26,9 +21,9 @@ A basic Peerster implementation
 
 quint32 generateRandom()
 {
-	qsrand(qrand());
-	return qrand(); 
+	qsrand(qrand()); return qrand(); 
 }
+
 void CustomTextEdit::keyPressEvent(QKeyEvent* e)
 {
 	if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)
@@ -36,7 +31,6 @@ void CustomTextEdit::keyPressEvent(QKeyEvent* e)
 	else 
 		QTextEdit::keyPressEvent(e);
 } 
-
 
 ChatDialog::ChatDialog()
 {
@@ -48,7 +42,6 @@ ChatDialog::ChatDialog()
 	//Small text-entry box the user can enter messages.
 	//This widget normally expands only horizontally,
 	//leaving extra vertical space for the textview widget.
-	//TODO: text-entry box can hold multiple (say 2 or 3) lines
 	textline = new CustomTextEdit(this);
 	//A small text-entry line for the user to add new peers
 	hostline = new QLineEdit(this);
@@ -168,7 +161,6 @@ void ChatDialog::sendAntiEntropyStatus()
 	sendStatusMessage(randompeer.senderPort,randompeer.sender);
 }
 
-//TODO: Refactor
 void ChatDialog::gotReturnPressed()
 {
 	QVariantMap message;																		//Prepare user input
@@ -201,7 +193,7 @@ Peer ChatDialog::chooseRandomPeer()
 void ChatDialog::sendRumorMessage(QVariantMap message){
 	//Choose a random peer to rumor monger to from known peers
 	Peer randompeer = chooseRandomPeer();
-	qDebug()<<"SENDING RUMOR"<<message<<randompeer.host<<randompeer.senderPort;
+	// qDebug()<<"Sending rumor to"<<randompeer.host<<randompeer.senderPort;
 	//Re-initialize timer and success flag to timeout on failure
 	responsetimer->start(2000); success = false;
 	//Serialize the QVMap and send the datagram to randompeer
@@ -240,7 +232,7 @@ void ChatDialog::gotNewMessage()
   		break;
   }
   if (i==peerlistsize){
-  	qDebug()<<"New Peer added" <<sender<<senderPort;
+  	// qDebug()<<"New Peer added" <<sender<<senderPort;
   	peerlist->append(Peer(sender,senderPort));
   }
 
@@ -261,7 +253,6 @@ void ChatDialog::gotNewMessage()
 				statmap.insert(j.key(),1);		//Add this node to their want statmap
 			}
 		}
-	  // qDebug()<<"GOT STATUS"<<sender<<senderPort<<map;
 		QMapIterator<QString,QVariant> i (statmap);		//iterate over all statuses
 		while (i.hasNext()) {
 			i.next();
@@ -275,7 +266,6 @@ void ChatDialog::gotNewMessage()
 			//compare sequence numbers to decide what action to take
 			if (incomingseqno < currentseqno) {				//Sender is missing messages
 				//Send the next message in sequence to sender
-				qDebug()<<"PEER BEHIND"<<sender<<senderPort;
 				QVariantMap::iterator i = 
 				recvdmessagemap.find(incomingorigin);
 				while (i!=map.end() && i.key()==incomingorigin) {
@@ -312,7 +302,7 @@ void ChatDialog::gotNewMessage()
 			statusmap.insert(incomingorigin,1);
 		}
 		seqnodt temp = statusmap[incomingorigin].toUInt();
-		if (incomingseqno == temp) {	//Only rumor monger if caught up? TODO:THINK
+		if (incomingseqno == temp) {	
 			textview->append(incomingorigin + ":"+textline);	//Display the new rumor
 			statusmap.insert(incomingorigin,++temp);					//update sequence number
 			recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
