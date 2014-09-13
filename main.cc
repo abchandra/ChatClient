@@ -271,6 +271,8 @@ void ChatDialog::gotNewMessage()
 			}
 			seqnodt currentseqno = statusmap.value(incomingorigin).toUInt();
 			//compare sequence numbers to decide what action to take
+			if (incomingseqno < 1)
+				continue;
 			if (incomingseqno < currentseqno) {				//Sender is missing messages
 				//Send the next message in sequence to sender
 				QVariantMap::iterator i = 
