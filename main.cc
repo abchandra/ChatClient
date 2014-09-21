@@ -102,7 +102,7 @@ ChatDialog::ChatDialog()
 	routetimer = new QTimer(this);
 	connect(routetimer,SIGNAL(timeout()),this,SLOT(sendRouteRumor()));
 	routetimer->start(60000);
-
+	sendRouteRumor();
 }
 
 ChatDialog::~ChatDialog()
@@ -190,7 +190,6 @@ void ChatDialog::sendRouteRumor()
 	recvdmessagemap.insertMulti(origin, message);	//Update recvdmessages	
 	currentrumor = message;												//Update current rumor
 	sendRumorMessage(message);										//Send rumor
-
 }
 void ChatDialog::gotReturnPressed()
 {
@@ -263,7 +262,7 @@ void ChatDialog::gotNewMessage()
   		break;
   }
   if (i==peerlistsize){
-  	// qDebug()<<"New Peer added" <<sender<<senderPort;
+    qDebug()<<"New Peer added" <<sender<<senderPort;
   	peerlist->append(Peer(sender,senderPort));
   }
 
@@ -324,20 +323,23 @@ void ChatDialog::gotNewMessage()
 				currentrumor.clear(); 																	 //Cease monger
 		}
 	}
-	else if (!map.contains(ORIGIN_KEY) || !map.contains(SEQ_KEY)){	//Rumor message
+	else if (map.contains(ORIGIN_KEY) && map.contains(SEQ_KEY)){	//Rumor message
 		QString incomingorigin = map.value(ORIGIN_KEY).toString();
 		quint32 incomingseqno = map.value(SEQ_KEY).toUInt();
 		
 		if (!statusmap.contains(incomingorigin)) {			//Add any unseen origins
 			statusmap.insert(incomingorigin,1);
 		}
-		quint32 temp = statusmap[incomingorigin].toUInt();
+		quint32 temp = statusmap.value(incomingorigin).toUInt();
 		if (incomingseqno == temp) {
 				if (map.contains(CHAT_KEY)) {											//Chat rumor				
 				QString textline = map.value(CHAT_KEY).toString();		
 				textview->append(incomingorigin + ":"+textline);	//Display new rumor
-				recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
 			}
+			// else {
+			// 	qDebug()<<"GOT A ROUTE RUMOR BIATCH!";
+			// }
+			recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
 			statusmap.insert(incomingorigin,++temp);					//update sequence number
 			hophash.insert(incomingorigin,										//update routing table
 				qMakePair(sender,senderPort));
