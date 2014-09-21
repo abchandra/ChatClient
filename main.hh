@@ -9,20 +9,20 @@ A basic Peerster implementation
 #ifndef PEERSTER_MAIN_HH
 #define PEERSTER_MAIN_HH
 
-#include <QDialog>
-#include <QTextEdit>
-#include <QLineEdit>
-#include <QKeyEvent>
-#include <QUdpSocket>
-#include <QMap>
-#include <QList>
 #include <QDataStream>
+#include <QDialog>
+#include <QHash>
 #include <QHostInfo>
+#include <QKeyEvent>
+#include <QLineEdit>
 #include <QList>
+#include <QList>
+#include <QMap>
+#include <QTextEdit>
 #include <QTimer>
+#include <QUdpSocket>
+#include <QVBoxLayout>
 
-typedef QString origindt;
-typedef quint32 seqnodt;
 //Text Edit for chat line
 //TODO: 2-3 line bug. Consider QtPlainTextEdit
 class CustomTextEdit : public QTextEdit
@@ -64,29 +64,38 @@ class ChatDialog : public QDialog
 
 	public:
 		ChatDialog();
+		~ChatDialog();
 		void addPeers(QStringList);		//Add peers entered as formatter strings
 	public slots:
 		void gotReturnPressed();			//Handles delivery of rumors orignating here
 		void gotNewMessage();					//Handles readyRead() for incoming datagrams
 		void sendAntiEntropyStatus();	//Implementation of anti-entropy
+		void sendRouteRumor();				//Implementation of periodic route rumoring
 		void lookedUp(QHostInfo);			//Handles completed DNS lookups
 		void addPeer();								//Add a new peer to  peerlist
 		void checkReceipt();					//Implements timeouts against
-																	// non-responsive peers
+																	//non-responsive peers
 		
 
 	private:
+		QVBoxLayout *layout;					//Layout of GUI
 		QTextEdit *textview; 					//Main display view for rumors sent and rcvd
 		CustomTextEdit *textline;			//Text edit to enter new rumors
 		QLineEdit *hostline;					//Line edit to enter new peers
+		
 		NetSocket sock;								//Netsocket instance to bind to a port
-		seqnodt seqno;								//The counter for rumors sent by instance
-		origindt origin;							//Our random origin key
+		quint32 seqno;								//Counter for rumors sent by this instance
+		QString origin;							//Our random origin key
 		QVariantMap currentrumor;			//Current rumor for rumor-mongering
 		QList<Peer> *peerlist;				//list of known peers
 		QMap<QString,quint16> unresolvedhostmap; //Hosts currently being lookedup
-		QTimer *responsetimer;				//Timer for timeouts on unresponsive peer		
-		bool success;									//verify if a response was rcvd before timeout			
+		QHash<QString,QPair<QHostAddress,quint16> > hophash;//next hop table(routing)
+
+		QTimer *responsetimer;				//Timer for timeouts on unresponsive peer
+		QTimer *entropytimer;					//Timer for firing off anti-entropy messages
+		QTimer *routetimer;						//Timer for firing off periodic route rumors		
+		bool success;									//Verify if a response was rcvd before timeout			
+		
 		void sendRumorMessage(QVariantMap);	//Implementation of rumormongering
 		void sendStatusMessage(quint16 senderPort, 				//Send status message to
 			QHostAddress sender = QHostAddress::LocalHost);	//specified peer

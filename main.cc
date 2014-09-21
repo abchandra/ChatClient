@@ -7,7 +7,7 @@ A basic Peerster implementation
 ************************************/
 #include <unistd.h>
 
-#include <QVBoxLayout>
+
 #include <QApplication>
 #include <QDebug>
 #include <QDateTime>
@@ -49,7 +49,7 @@ ChatDialog::ChatDialog()
 	//Lay out the widgets to appear in the main window.
 	//For Qt widget and layout concepts see:
 	//http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
-	QVBoxLayout *layout = new QVBoxLayout();
+	layout = new QVBoxLayout();
 	layout->addWidget(textview);
 	layout->addWidget(textline);
 	layout->addWidget(hostline);
@@ -95,21 +95,34 @@ ChatDialog::ChatDialog()
 	connect(responsetimer,SIGNAL(timeout()),this,SLOT(checkReceipt()));
 	//Register a callback on entropytimer's timeout() signal to send a status
 	//message to a random peer as part of anti-entropy implementation
-	QTimer *entropytimer = new QTimer(this);
+	entropytimer = new QTimer(this);
 	connect(entropytimer,SIGNAL(timeout()),this,SLOT(sendAntiEntropyStatus()));
 	entropytimer->start(10000);
 
+	routetimer = new QTimer(this);
+	connect(routetimer,SIGNAL(timeout()),this,SLOT(sendRouteRumor()));
+	routetimer->start(60000);
+
 }
 
-void ChatDialog::checkReceipt(){
-	if (!success)
-		success=true;
-		//If there is a rumor, randomly decide whether to continue rumormongering
-		if (!currentrumor.isEmpty() && generateRandom()%2==0)
+ChatDialog::~ChatDialog()
+{
+	delete textview; delete textline; delete hostline; delete peerlist;
+	delete responsetimer; delete entropytimer; delete layout;
+}
+
+void ChatDialog::checkReceipt()
+{
+	if (success)
+		return;
+		success = true;
+		//If there is a rumor, continue rumormongering
+		if (!currentrumor.isEmpty())
 		 sendRumorMessage(currentrumor);
 }
 
-void ChatDialog::addPeer(){
+void ChatDialog::addPeer()
+{
 	
 	QStringList splitlist; splitlist.insert(0,hostline->text());
 	addPeers(splitlist);
@@ -164,21 +177,32 @@ void ChatDialog::sendAntiEntropyStatus()
 	if (!peerlist->size())
 		return;
 	Peer randompeer = chooseRandomPeer();
-	qDebug()<<"Anti-entropy:"<<randompeer.host<<randompeer.senderPort;
+	//qDebug()<<"Anti-entropy:"<<randompeer.host<<randompeer.senderPort;
 	sendStatusMessage(randompeer.senderPort,randompeer.sender);
 }
 
+void ChatDialog::sendRouteRumor()
+{
+	QVariantMap message;
+	message[ORIGIN_KEY] = QVariant(origin);				//Ready route rumor
+	message[SEQ_KEY] = seqno++;
+	statusmap.insert(origin,seqno);								//Update own statusmap
+	recvdmessagemap.insertMulti(origin, message);	//Update recvdmessages	
+	currentrumor = message;												//Update current rumor
+	sendRumorMessage(message);										//Send rumor
+
+}
 void ChatDialog::gotReturnPressed()
 {
 	QVariantMap message;																		//Prepare user input
 	message[CHAT_KEY] = QVariant(textline->toPlainText());	//to a QVMap suitable
 	message[ORIGIN_KEY] = QVariant(origin);									//for sending
 	message[SEQ_KEY] = seqno++;
-	statusmap.insert(origin,seqno);								//update own statusmap
-	recvdmessagemap.insertMulti(origin, message);	//update recvdmessages
-	textview->append(textline->toPlainText());		//update GUI
+	statusmap.insert(origin,seqno);								//Update own statusmap
+	recvdmessagemap.insertMulti(origin, message);	//Update recvdmessages
+	textview->append(textline->toPlainText());		//Update GUI
 	textline->clear();
-	currentrumor = message;												//update current rumor
+	currentrumor = message;												//Update current rumor
 	sendRumorMessage(message);										//Send rumor
 
 }
@@ -263,13 +287,13 @@ void ChatDialog::gotNewMessage()
 		QMapIterator<QString,QVariant> i (statmap);		//iterate over all statuses
 		while (i.hasNext()) {
 			i.next();
-			origindt incomingorigin = i.key();
+			QString incomingorigin = i.key();
 			quint32 incomingseqno = i.value().toUInt();
 		
 			if (!statusmap.contains(incomingorigin)) {	//Add any unseen origins
 				statusmap.insert(incomingorigin,1);
 			}
-			seqnodt currentseqno = statusmap.value(incomingorigin).toUInt();
+			quint32 currentseqno = statusmap.value(incomingorigin).toUInt();
 			//compare sequence numbers to decide what action to take
 			if (incomingseqno < 1)
 				continue;
@@ -300,20 +324,23 @@ void ChatDialog::gotNewMessage()
 				currentrumor.clear(); 																	 //Cease monger
 		}
 	}
-	else {																						//Rumor Message
-		
-		QString textline = map[CHAT_KEY].toString();			
-		origindt incomingorigin = map[ORIGIN_KEY].toString();
-		seqnodt incomingseqno = map[SEQ_KEY].toUInt();
+	else if (!map.contains(ORIGIN_KEY) || !map.contains(SEQ_KEY)){	//Rumor message
+		QString incomingorigin = map.value(ORIGIN_KEY).toString();
+		quint32 incomingseqno = map.value(SEQ_KEY).toUInt();
 		
 		if (!statusmap.contains(incomingorigin)) {			//Add any unseen origins
 			statusmap.insert(incomingorigin,1);
 		}
-		seqnodt temp = statusmap[incomingorigin].toUInt();
-		if (incomingseqno == temp) {	
-			textview->append(incomingorigin + ":"+textline);	//Display the new rumor
+		quint32 temp = statusmap[incomingorigin].toUInt();
+		if (incomingseqno == temp) {
+				if (map.contains(CHAT_KEY)) {											//Chat rumor				
+				QString textline = map.value(CHAT_KEY).toString();		
+				textview->append(incomingorigin + ":"+textline);	//Display new rumor
+				recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
+			}
 			statusmap.insert(incomingorigin,++temp);					//update sequence number
-			recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
+			hophash.insert(incomingorigin,										//update routing table
+				qMakePair(sender,senderPort));
 			sendStatusMessage(senderPort,sender);							//Reply with our status
 			sendRumorMessage(map);														//Rumor-monger	
 		}
