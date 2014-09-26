@@ -86,6 +86,9 @@ class ChatDialog : public QDialog
 		ChatDialog();
 		~ChatDialog();
 		void addPeers(QStringList);		//Add peers entered as formatter strings
+		void setnoforwarding(bool b){
+			noforwarding = b;
+		}
 	public slots:
 		void gotReturnPressed();			//Handles delivery of rumors orignating here
 		void gotNewMessage();					//Handles readyRead() for incoming datagrams
@@ -119,12 +122,12 @@ class ChatDialog : public QDialog
 		QTimer *entropytimer;					//Timer for firing off anti-entropy messages
 		QTimer *routetimer;						//Timer for firing off periodic route rumors		
 		bool success;									//Verify if a response was rcvd before timeout			
-		
+		bool noforwarding;						//no-forwarding to test NAT traversal
 		void sendRumorMessage(QVariantMap);	//Implementation of rumormongering
 		void sendStatusMessage(quint16 senderPort, 				//Send status message to
 			QHostAddress sender = QHostAddress::LocalHost);	//specified peer
-		void writeToSocket(QByteArray data, quint16 port,	//Calls writeDatagram with
-		 QHostAddress host = QHostAddress::LocalHost);		//a default host
+		void writeToSocket(QVariantMap message, quint16 port,//Calls writeDatagram
+		 QHostAddress host = QHostAddress::LocalHost);		//if forwading enabled
 		QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 		Peer chooseRandomPeer();	//Selects a random peer
 		

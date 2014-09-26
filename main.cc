@@ -18,6 +18,9 @@ A basic Peerster implementation
 #define ORIGIN_KEY "Origin"
 #define SEQ_KEY	"SeqNo" 
 #define STATUS_KEY "Want"
+#define SOURCE_KEY "Origin"
+#define DEST_KEY "Dest"
+#define HOP_KEY "HopLimit"
 
 quint32 generateRandom()
 {
@@ -139,16 +142,20 @@ void ChatDialog::addPeer()
 void ChatDialog::addPeers(QStringList argvlist){
 	int argc = argvlist.size();
 	for (int i=0; i<argc; i++) {
+		if (argvlist[i]=="-noforward") {
+			setnoforwarding(true);
+			continue;
+		}
 		QStringList splitlist = argvlist[i].split(":");	//"host:port"|"ipadd:port"
 		if (splitlist.size()!=2){												//Check Format
 			qDebug()<<"Invalid format. Use host:port or ip:port";
-			return;
+			continue;
 		}
 		bool isokay;
 		quint16 newPort = splitlist[1].toUInt(&isokay);				
 		if (!isokay){																	//Check for conversion errors
 			qDebug()<<"Invalid format. Port is not numeric";
-			return;
+			continue;
 		}
 		if(QHostAddress(splitlist[0]).isNull()){	//Check if convertable to ip
 			unresolvedhostmap.insertMulti(splitlist[0],newPort);
@@ -187,8 +194,14 @@ void ChatDialog::handleSendPm(QString privatetext)
 {
 	privatedialog->close();
 	delete privatedialog;
-	qDebug()<<"WOOT!"<<privatetext<<destinationorigin;
-	return;
+	QVariantMap message;																	
+	message[CHAT_KEY] = QVariant(privatetext);	
+	message[SOURCE_KEY] = QVariant(origin);	
+	message[DEST_KEY] = QVariant(destinationorigin);
+	message[HOP_KEY] = QVariant(10); 								
+	QPair<QHostAddress,quint16> nexthop = hophash.value(destinationorigin);
+	writeToSocket(message,nexthop.second,nexthop.first);
+	//qDebug()<<"PM:"<<privatetext<<destinationorigin<<origin;
 }
 void ChatDialog::lookedUp(QHostInfo host)
 {
@@ -265,12 +278,15 @@ void ChatDialog::sendRumorMessage(QVariantMap message){
 	//Re-initialize timer and success flag to timeout on failure
 	responsetimer->start(2000); success = false;
 	//Serialize the QVMap and send the datagram to randompeer
-	writeToSocket(serializeToByteArray(message),
+	writeToSocket(message,
 		randompeer.senderPort,randompeer.sender);
 }
 
-void ChatDialog::writeToSocket(QByteArray data, quint16 port,QHostAddress host)
+void ChatDialog::writeToSocket(QVariantMap message, quint16 port,QHostAddress host)
 {
+	if (message.contains(CHAT_KEY) && noforwarding)
+		return;
+	QByteArray data = serializeToByteArray(message);
 	sock.writeDatagram(data,host,port);	
 }
 
@@ -346,7 +362,7 @@ void ChatDialog::gotNewMessage()
 						continue;
 					}
 					if (message.value(SEQ_KEY).toUInt() == incomingseqno) {
-						writeToSocket(serializeToByteArray(message), senderPort, sender);
+						writeToSocket(message, senderPort, sender);
 						break;
 					}
 					++i;
@@ -392,13 +408,33 @@ void ChatDialog::gotNewMessage()
 	  	sendStatusMessage(senderPort,sender);
 		 }
 	}
+	else if (map.contains(SOURCE_KEY) && map.contains(DEST_KEY)) {
+		//qDebug()<<"PM!";
+		if (map.value(DEST_KEY) == origin && map.contains(CHAT_KEY)){
+			//qDebug()<<"FOR ME!";
+			textview->append(map.value(SOURCE_KEY).toString() +":PM : " + 
+											 map.value(CHAT_KEY).toString());
+		}
+		else if (map.contains(HOP_KEY)){
+			quint32 hopsremaining = map.value(HOP_KEY).toUInt() - 1;
+			if (hopsremaining > 0) {
+				map.insert(HOP_KEY,hopsremaining);
+				QPair<QHostAddress,quint16> nexthop = 
+							hophash.value(map.value(DEST_KEY).toString());
+				writeToSocket(map,nexthop.second,nexthop.first);
+			}
+		}
+	}
+	else{
+		qDebug()<<"HMM";
+	}
 }
 
 void ChatDialog::sendStatusMessage(quint16 senderPort, QHostAddress sender){
 	QVariantMap sendstatusmap;
 	sendstatusmap[STATUS_KEY] = statusmap; 
 	//Send it off
-	writeToSocket(serializeToByteArray(sendstatusmap),senderPort,sender);
+	writeToSocket(sendstatusmap,senderPort,sender);
 }
 NetSocket::NetSocket()
 {
@@ -436,6 +472,7 @@ int main(int argc, char **argv)
 
 	QStringList argumentlist = QCoreApplication::arguments();
 	argumentlist.removeAt(0);
+		dialog.setnoforwarding(false);
 	dialog.addPeers(argumentlist);			//Add Peers entered on command line
 																			
 																			//Enter the Qt main loop;	 
