@@ -1,0 +1,29 @@
+Abhishek Chandra
+CPSC 426 Fall 2014
+lab 1
+
+
+
+4. Actually reduce CustomTextEdit size to 2-3 lines
+
+################################################################################
+
+Things to figure out:
+
+1.What exactly happens when your sequence number is x and you receive
+	y, such that x>y? Do you ignore y and just send a status with x?
+	Or do you store y and wait for things to catch up before you display?
+
+2.When you get a needy status report, you start rumormongering. This rumor-
+	mongering is first directed at the needy person. But do you continue rumor
+	mongering after that?
+
+4.IMPORTANT: What is the timer trying to do?
+
+5.IMPORTANT: FIX random numbers
+
+
+8. GUI : error reporting for host name entry
+
+9. What if we add an origin but do not add it to routing table since
+we do not accept the message? Should this origin be in our combobox then

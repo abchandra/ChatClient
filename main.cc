@@ -46,6 +46,9 @@ ChatDialog::ChatDialog()
 	//A small text-entry line for the user to add new peers
 	hostline = new QLineEdit(this);
 	hostline->insert("Enter new host here");
+	//A combobox to display all know origins for sending private chats
+	privatebox = new QComboBox(this);
+	privatebox->addItem("Select Destination...");
 	//Lay out the widgets to appear in the main window.
 	//For Qt widget and layout concepts see:
 	//http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
@@ -53,6 +56,7 @@ ChatDialog::ChatDialog()
 	layout->addWidget(textview);
 	layout->addWidget(textline);
 	layout->addWidget(hostline);
+	layout->addWidget(privatebox);
 	setLayout(layout);
 
 	//Generate Origin Key : Append a random number to hostname
@@ -61,6 +65,7 @@ ChatDialog::ChatDialog()
 	origin = QHostInfo::localHostName() + QString::number(qrand());
 	seqno = 1;
 	statusmap.insert(origin, seqno);
+	privatebox->addItem(origin);
 	
 	//Lab1 EXERCISE 1 
 	//setFocus on the textline to for better UX
@@ -89,6 +94,8 @@ ChatDialog::ChatDialog()
 	//we can parse and add the peer added by the user.
 	connect(hostline, SIGNAL(returnPressed()),SLOT(addPeer()));
 
+	//Register callback on selection of an origin on the combobox
+	connect(privatebox,SIGNAL(activated(int)),this,SLOT(handleSelectionChanged(int)));
 	//Register a callback on responsetimer's timeout() signal to take necessary
 	//steps in case our rumor sending does not result in a status returned
 	responsetimer =new QTimer(this);
@@ -151,6 +158,37 @@ void ChatDialog::addPeers(QStringList argvlist){
 			peerlist->append(Peer(QHostAddress(splitlist[0]),
 				newPort));
 	}
+}
+//TODO: Extract to a separate file
+PrivateMessageDialog::PrivateMessageDialog()
+{
+	setWindowTitle("New Private Message");
+	privatetext = new QTextEdit(this);
+	sendbutton = new QPushButton("Send",this);
+	layout = new QVBoxLayout(this);
+	layout->addWidget(privatetext);
+	layout->addWidget(sendbutton);
+	connect(sendbutton,SIGNAL(released()),this,SLOT(handleSendButton()));
+	setLayout(layout);
+}
+
+void ChatDialog::handleSelectionChanged(int index)
+{
+	if (index == 0)
+		return;
+	destinationorigin = privatebox->itemText(index);
+	privatedialog = new PrivateMessageDialog();
+	connect(privatedialog,SIGNAL(sendpm(QString)),this,
+			SLOT(handleSendPm(QString)));
+	privatedialog->show();
+}
+
+void ChatDialog::handleSendPm(QString privatetext)
+{
+	privatedialog->close();
+	delete privatedialog;
+	qDebug()<<"WOOT!"<<privatetext<<destinationorigin;
+	return;
 }
 void ChatDialog::lookedUp(QHostInfo host)
 {
@@ -291,6 +329,7 @@ void ChatDialog::gotNewMessage()
 		
 			if (!statusmap.contains(incomingorigin)) {	//Add any unseen origins
 				statusmap.insert(incomingorigin,1);
+				privatebox->addItem(incomingorigin);
 			}
 			quint32 currentseqno = statusmap.value(incomingorigin).toUInt();
 			//compare sequence numbers to decide what action to take
@@ -329,6 +368,7 @@ void ChatDialog::gotNewMessage()
 		
 		if (!statusmap.contains(incomingorigin)) {			//Add any unseen origins
 			statusmap.insert(incomingorigin,1);
+			privatebox->addItem(incomingorigin);
 		}
 		quint32 temp = statusmap.value(incomingorigin).toUInt();
 		if (incomingseqno == temp) {
@@ -337,7 +377,7 @@ void ChatDialog::gotNewMessage()
 				textview->append(incomingorigin + ":"+textline);	//Display new rumor
 			}
 			// else {
-			// 	qDebug()<<"GOT A ROUTE RUMOR BIATCH!";
+			// 	qDebug()<<"GOT A ROUTE RUMOR!";
 			// }
 			recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
 			statusmap.insert(incomingorigin,++temp);					//update sequence number

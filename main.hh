@@ -9,6 +9,7 @@ A basic Peerster implementation
 #ifndef PEERSTER_MAIN_HH
 #define PEERSTER_MAIN_HH
 
+#include <QComboBox>
 #include <QDataStream>
 #include <QDialog>
 #include <QHash>
@@ -18,6 +19,7 @@ A basic Peerster implementation
 #include <QList>
 #include <QList>
 #include <QMap>
+#include <QPushButton>
 #include <QTextEdit>
 #include <QTimer>
 #include <QUdpSocket>
@@ -34,6 +36,24 @@ class CustomTextEdit : public QTextEdit
 		void keyPressEvent(QKeyEvent* event);
 	signals:
 		void returnPressed();
+};
+
+class PrivateMessageDialog : public QDialog
+{
+	Q_OBJECT
+
+	public:
+		PrivateMessageDialog(); //TODO: add destructor
+		QVBoxLayout *layout;
+		QTextEdit* privatetext;
+		QPushButton* sendbutton;
+
+		public slots:
+		void handleSendButton(){
+			emit sendpm(privatetext->toPlainText());
+		}
+		signals:
+		void sendpm(QString);
 };
 
 class NetSocket : public QUdpSocket
@@ -69,6 +89,8 @@ class ChatDialog : public QDialog
 	public slots:
 		void gotReturnPressed();			//Handles delivery of rumors orignating here
 		void gotNewMessage();					//Handles readyRead() for incoming datagrams
+		void handleSelectionChanged(int);//Handles activated() for origin list
+		void handleSendPm(QString);		//Send private message
 		void sendAntiEntropyStatus();	//Implementation of anti-entropy
 		void sendRouteRumor();				//Implementation of periodic route rumoring
 		void lookedUp(QHostInfo);			//Handles completed DNS lookups
@@ -82,10 +104,12 @@ class ChatDialog : public QDialog
 		QTextEdit *textview; 					//Main display view for rumors sent and rcvd
 		CustomTextEdit *textline;			//Text edit to enter new rumors
 		QLineEdit *hostline;					//Line edit to enter new peers
-		
+		QComboBox *privatebox;				//List of origins for private messaging 
+		PrivateMessageDialog *privatedialog; //Dialog for sending private messages
 		NetSocket sock;								//Netsocket instance to bind to a port
 		quint32 seqno;								//Counter for rumors sent by this instance
-		QString origin;							//Our random origin key
+		QString origin;								//Our random origin key
+		QString destinationorigin;		//Destination for current private message
 		QVariantMap currentrumor;			//Current rumor for rumor-mongering
 		QList<Peer> *peerlist;				//list of known peers
 		QMap<QString,quint16> unresolvedhostmap; //Hosts currently being lookedup
