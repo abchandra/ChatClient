@@ -97,7 +97,7 @@ class ChatDialog : public QDialog
 		void sendAntiEntropyStatus();	//Implementation of anti-entropy
 		void sendRouteRumor();				//Implementation of periodic route rumoring
 		void lookedUp(QHostInfo);			//Handles completed DNS lookups
-		void addPeer();								//Add a new peer to  peerlist
+		void addPeer();								//Add a new peer from hostline
 		void checkReceipt();					//Implements timeouts against
 																	//non-responsive peers
 		
@@ -130,6 +130,7 @@ class ChatDialog : public QDialog
 		 QHostAddress host = QHostAddress::LocalHost);		//if forwading enabled
 		QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 		Peer chooseRandomPeer();	//Selects a random peer
+		void addNewPeer(QHostAddress,quint16); //add a peer if new
 		
 		
 		//The recvdmessage map has origin key with multiple rumor messages as the

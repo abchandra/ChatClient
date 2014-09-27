@@ -21,6 +21,8 @@ A basic Peerster implementation
 #define SOURCE_KEY "Origin"
 #define DEST_KEY "Dest"
 #define HOP_KEY "HopLimit"
+#define LASTIP_KEY "LastIP"
+#define LASTPORT_KEY "LastPort"
 
 quint32 generateRandom()
 {
@@ -51,7 +53,7 @@ ChatDialog::ChatDialog()
 	hostline->insert("Enter new host here");
 	//A combobox to display all know origins for sending private chats
 	privatebox = new QComboBox(this);
-	privatebox->addItem("Select Destination...");
+	privatebox->addItem("Select Destination for PM...");
 	//Lay out the widgets to appear in the main window.
 	//For Qt widget and layout concepts see:
 	//http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
@@ -133,7 +135,6 @@ void ChatDialog::checkReceipt()
 
 void ChatDialog::addPeer()
 {
-	
 	QStringList splitlist; splitlist.insert(0,hostline->text());
 	addPeers(splitlist);
 	hostline->clear();
@@ -288,7 +289,23 @@ void ChatDialog::writeToSocket(QVariantMap message, quint16 port,QHostAddress ho
 		return;
 	QByteArray data = serializeToByteArray(message);
 	sock.writeDatagram(data,host,port);	
+  if (noforwarding)
+    qDebug()<<"ROUTE RUMOR sent to"<<message<<host<<port;
 }
+void ChatDialog::addNewPeer(QHostAddress sender, quint16 senderPort){
+  int peerlistsize = peerlist->size();
+ 	int i;
+  for(i=0; i<peerlistsize; ++i) {
+  	if ((peerlist->at(i).sender == sender) && 
+  		(peerlist->at(i).senderPort == senderPort))
+  		break;
+  }
+  if (i==peerlistsize){
+    qDebug()<<"New Peer added" <<sender<<senderPort;
+  	peerlist->append(Peer(sender,senderPort));
+  }
+}
+
 
 void ChatDialog::gotNewMessage()
 {
@@ -308,18 +325,7 @@ void ChatDialog::gotNewMessage()
 
 	//Check if the immediate sender is a new source by cycling through
 	//peerlist. If it is, add it as peer for future communications.
-	int peerlistsize = peerlist->size();
- 	int i;
-  for(i=0; i<peerlistsize; ++i) {
-  	if ((peerlist->at(i).sender == sender) && 
-  		(peerlist->at(i).senderPort == senderPort))
-  		break;
-  }
-  if (i==peerlistsize){
-    qDebug()<<"New Peer added" <<sender<<senderPort;
-  	peerlist->append(Peer(sender,senderPort));
-  }
-
+	addNewPeer(sender,senderPort);
 	//Check what kind of datagram this is, and act accordingly
 	if (map.contains(STATUS_KEY)) {									//Status Message
 		success = true;																//Reset success for timeout	
@@ -381,7 +387,18 @@ void ChatDialog::gotNewMessage()
 	else if (map.contains(ORIGIN_KEY) && map.contains(SEQ_KEY)){	//Rumor message
 		QString incomingorigin = map.value(ORIGIN_KEY).toString();
 		quint32 incomingseqno = map.value(SEQ_KEY).toUInt();
-		
+		//Check for LASTIP_KEY and LASTPORT_KEY for NAT travesal
+    bool isrumordirect = false;
+		if (map.contains(LASTIP_KEY) && map.contains(LASTPORT_KEY)){		
+			quint16 lastport = map.value(LASTPORT_KEY).toUInt();			
+			QHostAddress lastip = QHostAddress(map.value(LASTIP_KEY).toUInt());
+			addNewPeer(lastip,lastport);
+		}
+    else 
+      isrumordirect = true;  
+    //Overwrite lastIP and lastPort for NAT Traversal
+    map.insert(LASTIP_KEY,sender.toIPv4Address());
+    map.insert(LASTPORT_KEY,senderPort);
 		if (!statusmap.contains(incomingorigin)) {			//Add any unseen origins
 			statusmap.insert(incomingorigin,1);
 			privatebox->addItem(incomingorigin);
@@ -392,15 +409,31 @@ void ChatDialog::gotNewMessage()
 				QString textline = map.value(CHAT_KEY).toString();		
 				textview->append(incomingorigin + ":"+textline);	//Display new rumor
 			}
-			// else {
-			// 	qDebug()<<"GOT A ROUTE RUMOR!";
-			// }
+
 			recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
 			statusmap.insert(incomingorigin,++temp);					//update sequence number
 			hophash.insert(incomingorigin,										//update routing table
 				qMakePair(sender,senderPort));
 			sendStatusMessage(senderPort,sender);							//Reply with our status
-			sendRumorMessage(map);														//Rumor-monger	
+      if (!map.contains(CHAT_KEY)) {  //Route messages must be sent to all peers
+        int peerlistsize = peerlist->size();
+        for(int i=0; i<peerlistsize; ++i) {
+          writeToSocket(map,peerlist->at(i).senderPort,peerlist->at(i).sender);
+        }
+      }
+      else
+			 sendRumorMessage(map);														//Rumor-monger	
+		}
+		else if(incomingseqno == temp -1 && isrumordirect){
+      //While we currently have this rumor, we will update our
+      //route map to reflect that this is a direct route
+        hophash.insert(incomingorigin,qMakePair(sender,senderPort));
+        if (!map.contains(CHAT_KEY)) {//Route messages must be sent to all peers
+          int peerlistsize = peerlist->size();
+          for(int i=0; i<peerlistsize; ++i) {
+            writeToSocket(map,peerlist->at(i).senderPort,peerlist->at(i).sender);
+          }
+        }
 		}
 		else {
 			//If we are lagging too far behind, we just ignore the message
