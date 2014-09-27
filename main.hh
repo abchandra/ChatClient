@@ -45,7 +45,7 @@ class PrivateMessageDialog : public QDialog
 	public:
 		PrivateMessageDialog(); //TODO: add destructor
 		QVBoxLayout *layout;
-		QTextEdit* privatetext;
+		CustomTextEdit* privatetext;
 		QPushButton* sendbutton;
 
 		public slots:
@@ -131,7 +131,7 @@ class ChatDialog : public QDialog
 		QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 		Peer chooseRandomPeer();	//Selects a random peer
 		void addNewPeer(QHostAddress,quint16); //add a peer if new
-		
+		void SendRumorToAllPeers(QVariantMap); //Send Rumor to all Peers
 		
 		//The recvdmessage map has origin key with multiple rumor messages as the
 		//values. Each value is thus a QVMap: QVMap<"origin",QVMap(rumor message)>
