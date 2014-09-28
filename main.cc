@@ -292,7 +292,7 @@ void ChatDialog::writeToSocket(QVariantMap message, quint16 port,QHostAddress ho
 		return;
 	QByteArray data = serializeToByteArray(message);
 	sock.writeDatagram(data,host,port);	
-    qDebug()<<"RUMOR:"<<message<<"\n"<<"DESTINATION:"<<host<<port;
+    // qDebug()<<"RUMOR:"<<message<<"\n"<<"DESTINATION:"<<host<<port;
 }
 void ChatDialog::addNewPeer(QHostAddress sender, quint16 senderPort){
   int peerlistsize = peerlist->size();
@@ -334,7 +334,7 @@ void ChatDialog::gotNewMessage()
 	//Check if the immediate sender is a new source by cycling through
 	//peerlist. If it is, add it as peer for future communications.
 	addNewPeer(sender,senderPort);
-	qDebug()<<"\n \n \n ##############RECEIVED############### \n"<<map<<"##################################";
+	// qDebug()<<"\n \n \n ##############RECEIVED############### \n"<<map<<"##################################";
 	
 	/************************STATUS MESSAGE**************************************/
 	if (map.contains(STATUS_KEY)) {									//Status Message
