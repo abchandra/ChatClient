@@ -190,6 +190,7 @@ void ChatDialog::handleSelectionChanged(int index)
 	privatedialog = new PrivateMessageDialog();
 	connect(privatedialog,SIGNAL(sendpm(QString)),this,
 			SLOT(handleSendPm(QString)));
+	privatebox->setCurrentIndex(0);
 	privatedialog->show();
 }
 
