@@ -71,10 +71,10 @@ class Peer 																			//Holds information for a peer
 	public:
 		Peer(QHostAddress s,quint16 p,QString h="")
 		{
-			 sender = s; senderPort = p; host = h;
+			 sender = s; senderport = p; host = h;
 		}
 		QHostAddress sender;
-		quint16 senderPort;
+		quint16 senderport;
 		QString host;
 };
 //Main class for peerster instance
@@ -100,7 +100,6 @@ class ChatDialog : public QDialog
 		void addPeer();								//Add a new peer from hostline
 		void checkReceipt();					//Implements timeouts against
 																	//non-responsive peers
-		
 
 	private:
 		QVBoxLayout *layout;					//Layout of GUI
@@ -124,7 +123,7 @@ class ChatDialog : public QDialog
 		bool success;									//Verify if a response was rcvd before timeout			
 		bool noforwarding;						//no-forwarding to test NAT traversal
 		void sendRumorMessage(QVariantMap);	//Implementation of rumormongering
-		void sendStatusMessage(quint16 senderPort, 				//Send status message to
+		void sendStatusMessage(quint16 senderport, 				//Send status message to
 			QHostAddress sender = QHostAddress::LocalHost);	//specified peer
 		void writeToSocket(QVariantMap message, quint16 port,//Calls writeDatagram
 		 QHostAddress host = QHostAddress::LocalHost);		//if forwading enabled
@@ -132,6 +131,14 @@ class ChatDialog : public QDialog
 		Peer chooseRandomPeer();	//Selects a random peer
 		void addNewPeer(QHostAddress,quint16); //add a peer if new
 		void SendRumorToAllPeers(QVariantMap); //Send Rumor to all Peers
+
+		//Helper functions for gotNewMessage() to handle different types of rumors
+		void HandleStatusRumor(QVariantMap, QHostAddress, quint16);
+		void HandleChatRouteRumor(QVariantMap, QHostAddress, quint16);
+		void HandlePrivateMessageRumor(QVariantMap);
+		//Handle reading of datagram, Deserialize, and return map,sender,senderport
+		QVariantMap ReadDeserializeDatagram(QHostAddress*, quint16*);
+
 		
 		//The recvdmessage map has origin key with multiple rumor messages as the
 		//values. Each value is thus a QVMap: QVMap<"origin",QVMap(rumor message)>

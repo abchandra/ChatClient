@@ -232,8 +232,8 @@ void ChatDialog::sendAntiEntropyStatus()
 	if (!peerlist->size())
 		return;
 	Peer randompeer = chooseRandomPeer();
-	//qDebug()<<"Anti-entropy:"<<randompeer.host<<randompeer.senderPort;
-	sendStatusMessage(randompeer.senderPort,randompeer.sender);
+	//qDebug()<<"Anti-entropy:"<<randompeer.host<<randompeer.senderport;
+	sendStatusMessage(randompeer.senderport,randompeer.sender);
 }
 
 void ChatDialog::sendRouteRumor()
@@ -277,13 +277,13 @@ Peer ChatDialog::chooseRandomPeer()
 void ChatDialog::sendRumorMessage(QVariantMap message){
 	//Choose a random peer to rumor monger to from known peers
 	Peer randompeer = chooseRandomPeer();
-	// qDebug()<<"Sending rumor to"<<randompeer.host<<randompeer.senderPort;
+	// qDebug()<<"Sending rumor to"<<randompeer.host<<randompeer.senderport;
 	//Re-initialize timer and success flag to timeout on failure
 
 	responsetimer->start(2000); success = false;
 	//Serialize the QVMap and send the datagram to randompeer
 	writeToSocket(message,
-		randompeer.senderPort,randompeer.sender);
+		randompeer.senderport,randompeer.sender);
 }
 
 void ChatDialog::writeToSocket(QVariantMap message, quint16 port,QHostAddress host)
@@ -294,51 +294,41 @@ void ChatDialog::writeToSocket(QVariantMap message, quint16 port,QHostAddress ho
 	sock.writeDatagram(data,host,port);	
     // qDebug()<<"RUMOR:"<<message<<"\n"<<"DESTINATION:"<<host<<port;
 }
-void ChatDialog::addNewPeer(QHostAddress sender, quint16 senderPort){
+void ChatDialog::addNewPeer(QHostAddress sender, quint16 senderport){
   int peerlistsize = peerlist->size();
  	int i;
   for(i=0; i<peerlistsize; ++i) {
   	if ((peerlist->at(i).sender == sender) && 
-  		(peerlist->at(i).senderPort == senderPort))
+  		(peerlist->at(i).senderport == senderport))
   		break;
   }
   if (i==peerlistsize){
-    qDebug()<<"New Peer added" <<sender<<senderPort;
-  	peerlist->append(Peer(sender,senderPort));
+    qDebug()<<"New Peer added" <<sender<<senderport;
+  	peerlist->append(Peer(sender,senderport));
   }
 }
 void ChatDialog::SendRumorToAllPeers(QVariantMap map)
 {
   	int peerlistsize = peerlist->size();
 	for(int i=0; i<peerlistsize; ++i)
-  	writeToSocket(map,peerlist->at(i).senderPort,peerlist->at(i).sender);
+  	writeToSocket(map,peerlist->at(i).senderport,peerlist->at(i).sender);
 }
-
-void ChatDialog::gotNewMessage()
-{
-	/************************READ DATAGRAM***************************************/
+QVariantMap ChatDialog::ReadDeserializeDatagram(QHostAddress* sender, quint16* senderport){
 	//Read Datagram(as a serialized QByteArray) and sender details 
 	QByteArray *serializedarr = new QByteArray();
 	serializedarr->resize(sock.pendingDatagramSize());
-	QHostAddress sender;
-  quint16 senderPort;
 	sock.readDatagram(serializedarr ->data(),serializedarr->size(),
-										&sender, &senderPort);
+										sender, senderport);
 
 	//Deserialize the Datagram to a QVMap
 	QDataStream instream(serializedarr,QIODevice::ReadOnly);
 	QVariantMap map;
 	instream >> map;
 	delete serializedarr;
-	/****************************************************************************/
-	//Check if the immediate sender is a new source by cycling through
-	//peerlist. If it is, add it as peer for future communications.
-	addNewPeer(sender,senderPort);
-	// qDebug()<<"\n \n \n ##############RECEIVED############### \n"<<map<<"##################################";
-	
-	/************************STATUS MESSAGE**************************************/
-	if (map.contains(STATUS_KEY)) {									//Status Message
-		success = true;																//Reset success for timeout	
+	return map;	
+}
+void ChatDialog::HandleStatusRumor(QVariantMap map, QHostAddress sender, quint16 senderport){
+			success = true;																//Reset success for timeout	
 		QVariantMap statmap=map[STATUS_KEY].toMap(); 	//Extract status
 
 		//There may be peers who do not know which origins they want messages from.
@@ -375,7 +365,7 @@ void ChatDialog::gotNewMessage()
 						continue;
 					}
 					if (message.value(SEQ_KEY).toUInt() == incomingseqno) {
-						writeToSocket(message, senderPort, sender);
+						writeToSocket(message, senderport, sender);
 						break;
 					}
 					++i;
@@ -384,17 +374,16 @@ void ChatDialog::gotNewMessage()
 					qDebug()<<"Err: The message seems to have expired";	
 			}
 			else if (incomingseqno > currentseqno) 				//We are lagging behind
-				sendStatusMessage(senderPort,sender);				//Send own status
+				sendStatusMessage(senderport,sender);				//Send own status
 			else if (!currentrumor.isEmpty() && generateRandom()%2==1) //Coin flip
 					 sendRumorMessage(currentrumor);											 //Rumor monger
 			else
 				currentrumor.clear(); 																	 //Cease monger
 		}
-	}
+}
 
-	/************************RUMOR MESSAGE***************************************/
-	else if (map.contains(ORIGIN_KEY) && map.contains(SEQ_KEY)){	//Rumor message
-		QString incomingorigin = map.value(ORIGIN_KEY).toString();
+void ChatDialog::HandleChatRouteRumor(QVariantMap map, QHostAddress sender, quint16 senderport){
+	QString incomingorigin = map.value(ORIGIN_KEY).toString();
 		quint32 incomingseqno = map.value(SEQ_KEY).toUInt();
 		/******************NAT TRAVERSAL KEYS LOOKED UP *************/
 		//Check for LASTIP_KEY and LASTPORT_KEY for NAT travesal
@@ -408,7 +397,7 @@ void ChatDialog::gotNewMessage()
       isrumordirect = true;  
     //Overwrite lastIP and lastPort for NAT Traversal
     map.insert(LASTIP_KEY,sender.toIPv4Address());
-    map.insert(LASTPORT_KEY,senderPort);
+    map.insert(LASTPORT_KEY,senderport);
    /************************************************************/
 
     /*********************ADD UNSEEN ORIGINS*******************/
@@ -430,8 +419,8 @@ void ChatDialog::gotNewMessage()
 			recvdmessagemap.insertMulti(incomingorigin, map);	//update recvdmessages
 			temp++;																						//update sequence number
 			statusmap.insert(incomingorigin,temp);						//Insert in Status map
-			hophash.insert(incomingorigin,qMakePair(sender,senderPort));//Update Hop
-			sendStatusMessage(senderPort,sender);							//Reply with our status
+			hophash.insert(incomingorigin,qMakePair(sender,senderport));//Update Hop
+			sendStatusMessage(senderport,sender);							//Reply with our status
 			/**********ROUTEMONGER OR RUMORMONGER**************/
       if (!map.contains(CHAT_KEY)) 		//Route messages must be sent to all peers
       	SendRumorToAllPeers(map);
@@ -442,7 +431,7 @@ void ChatDialog::gotNewMessage()
 		else if(incomingseqno == temp -1 && isrumordirect){
       //While we currently have this rumor, we will update our
       //route map to reflect that this is a direct route
-        hophash.insert(incomingorigin,qMakePair(sender,senderPort));
+        hophash.insert(incomingorigin,qMakePair(sender,senderport));
         if (!map.contains(CHAT_KEY))
         	SendRumorToAllPeers(map);
 		}
@@ -450,12 +439,11 @@ void ChatDialog::gotNewMessage()
 		else {
 			//If we are lagging too far behind or the rumor is not fresh, we 
 			//send our status message to the sender to update us or them respectively
-	  	sendStatusMessage(senderPort,sender);
+	  	sendStatusMessage(senderport,sender);
 		 }
-	}
-	/*************************PRIVATE MESSAGE************************************/
-	else if (map.contains(SOURCE_KEY) && map.contains(DEST_KEY)) {
-		/*******************PM INTENDED FOR THIS NODE ****************/
+}
+ void ChatDialog::HandlePrivateMessageRumor(QVariantMap map){
+ 	/*******************PM INTENDED FOR THIS NODE ****************/
 		if (map.value(DEST_KEY) == origin && map.contains(CHAT_KEY)){
 			textview->append(map.value(SOURCE_KEY).toString() +
 				":Private Message : " +	map.value(CHAT_KEY).toString());
@@ -470,17 +458,30 @@ void ChatDialog::gotNewMessage()
 				writeToSocket(map,nexthop.second,nexthop.first);
 			}
 		}
-	}
-	/***********************INVALID MESSAGE TYPE*********************************/
-	else{
-		qDebug()<<"Invalid message:"<<map;
-	}
+ }
+
+void ChatDialog::gotNewMessage()
+{
+	//Read Datagram(as a serialized QByteArray) and retrieve sender details
+	QHostAddress sender; quint16 senderport; 
+	QVariantMap map = ReadDeserializeDatagram(&sender,&senderport);
+	//Check if the immediate sender is a new source by cycling through
+	//peerlist. If it is, add it as peer for future communications.
+	addNewPeer(sender,senderport);
+	if (map.contains(STATUS_KEY))																//Status Message
+		HandleStatusRumor(map,sender,senderport);
+	else if (map.contains(ORIGIN_KEY) && map.contains(SEQ_KEY))	//Rumor message
+		HandleChatRouteRumor(map,sender,senderport);
+	else if (map.contains(SOURCE_KEY) && map.contains(DEST_KEY))//Private Message
+		HandlePrivateMessageRumor(map);
+	else																											 //Invalid Message
+		qDebug()<<"Invalid message:"<<map;	
 }
 
-void ChatDialog::sendStatusMessage(quint16 senderPort, QHostAddress sender){
+void ChatDialog::sendStatusMessage(quint16 senderport, QHostAddress sender){
 	QVariantMap sendstatusmap;
 	sendstatusmap[STATUS_KEY] = statusmap; 
-	writeToSocket(sendstatusmap,senderPort,sender);
+	writeToSocket(sendstatusmap,senderport,sender);
 }
 
 NetSocket::NetSocket()
