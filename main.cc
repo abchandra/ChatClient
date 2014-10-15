@@ -7,7 +7,6 @@ A basic Peerster implementation
 ************************************/
 #include <unistd.h>
 
-
 #include <QApplication>
 #include <QDebug>
 #include <QDateTime>
@@ -39,6 +38,8 @@ void CustomTextEdit::keyPressEvent(QKeyEvent* e)
 
 ChatDialog::ChatDialog()
 {
+	QFileDialog dialog(this);
+	dialog.setFileMode(QFileDialog::AnyFile);
 	setWindowTitle("Peerster");
 	//Read-only text box where we display messages from everyone.
 	//This widget expands both horizontally and vertically.
@@ -57,11 +58,14 @@ ChatDialog::ChatDialog()
 	//Lay out the widgets to appear in the main window.
 	//For Qt widget and layout concepts see:
 	//http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
+	filebutton = new QPushButton("Share file...",this);
+
 	layout = new QVBoxLayout();
 	layout->addWidget(privatebox);
 	layout->addWidget(textview);
 	layout->addWidget(textline);
 	layout->addWidget(hostline);
+	layout->addWidget(filebutton);
 	setLayout(layout);
 
 	//Generate Origin Key : Append a random number to hostname
@@ -97,9 +101,10 @@ ChatDialog::ChatDialog()
 	//Register a callback on QLineEdit's returnPressed signal so that
 	//we can parse and add the peer added by the user.
 	connect(hostline, SIGNAL(returnPressed()),SLOT(addPeer()));
-
 	//Register callback on selection of an origin on the combobox
 	connect(privatebox,SIGNAL(activated(int)),this,SLOT(handleSelectionChanged(int)));
+	//Register callback on file share button to open file sharing dialog
+	connect(filebutton,SIGNAL(released()),this,SLOT(handleFileButton()));
 	//Register a callback on responsetimer's timeout() signal to take necessary
 	//steps in case our rumor sending does not result in a status returned
 	responsetimer =new QTimer(this);
@@ -193,7 +198,14 @@ void ChatDialog::handleSelectionChanged(int index)
 	privatebox->setCurrentIndex(0);
 	privatedialog->show();
 }
-
+void ChatDialog::handleFileButton(){
+	filedialog = new QFileDialog(this);
+	filedialog->setFileMode(QFileDialog::ExistingFiles);
+	QStringList fileNames;
+	if (filedialog->exec())
+	  fileNames = filedialog->selectedFiles();
+	qDebug()<<fileNames;
+}
 void ChatDialog::handleSendPm(QString privatetext)
 {
 	privatedialog->close();
@@ -514,7 +526,7 @@ bool NetSocket::bind()
 int main(int argc, char **argv)
 {
 	QApplication app(argc,argv);				//Initialize Qt toolkit
-
+	// QCA::Initializer qcainit;						//Initialize Crypto library
 	ChatDialog dialog;									//Create an initial chat dialog window
 	dialog.show();
 
@@ -526,4 +538,3 @@ int main(int argc, char **argv)
 																			//Enter the Qt main loop;	 
 	return app.exec();									//everything else is event driven
 }
-

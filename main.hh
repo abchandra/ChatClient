@@ -24,6 +24,7 @@ A basic Peerster implementation
 #include <QTimer>
 #include <QUdpSocket>
 #include <QVBoxLayout>
+#include <QFileDialog>
 
 //Text Edit for chat line
 //TODO: 2-3 line bug. Consider QtPlainTextEdit
@@ -93,6 +94,7 @@ class ChatDialog : public QDialog
 		void gotReturnPressed();			//Handles delivery of rumors orignating here
 		void gotNewMessage();					//Handles readyRead() for incoming datagrams
 		void handleSelectionChanged(int);//Handles activated() for origin list
+		void handleFileButton();			//Handles released() for file sharing button
 		void handleSendPm(QString);		//Send private message
 		void sendAntiEntropyStatus();	//Implementation of anti-entropy
 		void sendRouteRumor();				//Implementation of periodic route rumoring
@@ -107,7 +109,9 @@ class ChatDialog : public QDialog
 		CustomTextEdit *textline;			//Text edit to enter new rumors
 		QLineEdit *hostline;					//Line edit to enter new peers
 		QComboBox *privatebox;				//List of origins for private messaging 
+		QPushButton* filebutton;			//Button to launch dialog for file sharing
 		PrivateMessageDialog *privatedialog; //Dialog for sending private messages
+		QFileDialog* filedialog;
 		NetSocket sock;								//Netsocket instance to bind to a port
 		quint32 seqno;								//Counter for rumors sent by this instance
 		QString origin;								//Our random origin key
@@ -122,6 +126,7 @@ class ChatDialog : public QDialog
 		QTimer *routetimer;						//Timer for firing off periodic route rumors		
 		bool success;									//Verify if a response was rcvd before timeout			
 		bool noforwarding;						//no-forwarding to test NAT traversal
+		
 		void sendRumorMessage(QVariantMap);	//Implementation of rumormongering
 		void sendStatusMessage(quint16 senderport, 				//Send status message to
 			QHostAddress sender = QHostAddress::LocalHost);	//specified peer
@@ -139,7 +144,6 @@ class ChatDialog : public QDialog
 		//Handle reading of datagram, Deserialize, and return map,sender,senderport
 		QVariantMap ReadDeserializeDatagram(QHostAddress*, quint16*);
 
-		
 		//The recvdmessage map has origin key with multiple rumor messages as the
 		//values. Each value is thus a QVMap: QVMap<"origin",QVMap(rumor message)>
 		QVariantMap recvdmessagemap;
