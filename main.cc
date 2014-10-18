@@ -255,7 +255,7 @@ void ChatDialog::handleDownloadButton() {
  	while (i.hasNext()) {
  		i.next();
     if (i.key()!=origin)
-    	knownorigins.append(origin);
+    	knownorigins.append(i.key());
  }
 	sharedialog = new DownloadFileDialog(knownorigins);
 	connect(sharedialog,SIGNAL(downloadfile(QString,QByteArray)),this,
@@ -265,13 +265,15 @@ void ChatDialog::handleDownloadButton() {
 
 void ChatDialog::handleDownloadFile(QString destination, QByteArray fileid) {
 	//Close the dialog and free it
-	qDebug()<<"BOO!";
 	sharedialog->close();
 	delete sharedialog;
 	qDebug()<<"THIS"<<fileid;
-	if (destination.isEmpty())
+	if (destination.isEmpty()){
 		return;
-	sendBlockRequestMessage(destination,fileid);
+	}
+	//update requested metafiles
+	requestedmetafiles.insert(QByteArray::fromHex(fileid),destination);
+	sendBlockRequestMessage(destination,QByteArray::fromHex(fileid));
 }
 
 void ChatDialog::sendBlockRequestMessage(QString destination, QByteArray hashval){
@@ -279,7 +281,8 @@ void ChatDialog::sendBlockRequestMessage(QString destination, QByteArray hashval
 	downloadrequestmap[ORIGIN_KEY] = QVariant(origin);	
 	downloadrequestmap[DEST_KEY] = QVariant(destination);
 	downloadrequestmap[HOP_KEY] = QVariant(HOPLIMIT);
-	downloadrequestmap[BLOCK_REQUEST_KEY] = QVariant(hashval); 								
+	downloadrequestmap[BLOCK_REQUEST_KEY] = QVariant(hashval);
+	qDebug()<<"SENDING A BLOCK REQUEST FOR"<<hashval.toHex(); 								
 	QPair<QHostAddress,quint16> nexthop = hophash.value(destination);
 	writeToSocket(downloadrequestmap,nexthop.second,nexthop.first);
 }
@@ -555,16 +558,30 @@ void ChatDialog::handleChatRouteRumor(QVariantMap map, QHostAddress sender, quin
 			else if (map.contains(BLOCK_REQUEST_KEY)) { //Block request
 				QByteArray hashval = map.value(BLOCK_REQUEST_KEY).toByteArray();
 				QByteArray* result = filemanager.findBlockFromHash(hashval);
-				if(result && filemanager.sanityCheck(hashval,(*result)))
+				if (result==NULL)
+					qDebug()<<"Err: block not found";
+				if(result!=NULL && filemanager.sanityCheck(hashval,(*result))){
 					sendBlockReplyMessage(*result,hashval,map.value(ORIGIN_KEY).toString());
+				}
 			}
 			else if (map.contains(BLOCK_REPLY_KEY) && map.contains(DATA_KEY)){ //Block reply
 				QByteArray data = map.value(DATA_KEY).toByteArray();
 				QByteArray hashval = map.value(BLOCK_REPLY_KEY).toByteArray();
-				if (filemanager.sanityCheck(hashval,data))
-					0;//TODO:save the data
-				
-				//Send a new block request if necessary
+				QString source = map.value(ORIGIN_KEY).toString();
+				if (filemanager.sanityCheck(hashval,data)){
+					QByteArray nexthash="";
+					if (requestedmetafiles.contains(hashval)) {
+						requestedmetafiles.remove(hashval);
+						 nexthash = filemanager.addDownload(hashval,data,source);
+					}
+					else{
+						nexthash = filemanager.addBlock(hashval,data,source);
+					}
+					if (!nexthash.isEmpty()){
+						// qDebug()<<"Sending next request";
+						sendBlockRequestMessage(source,nexthash);
+					}
+				}
 			}
 		}
 		/******************INTENDED FOR ANOTHER NODE**************/

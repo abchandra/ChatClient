@@ -146,7 +146,7 @@ class ChatDialog : public QDialog
 		QList<Peer> *peerlist;				//list of known peers
 		QMap<QString,quint16> unresolvedhostmap; //Hosts currently being lookedup
 		QHash<QString,QPair<QHostAddress,quint16> > hophash;//next hop table(routing)
-
+		QMap<QByteArray,QString> requestedmetafiles;
 		QTimer *responsetimer;				//Timer for timeouts on unresponsive peer
 		QTimer *entropytimer;					//Timer for firing off anti-entropy messages
 		QTimer *routetimer;						//Timer for firing off periodic route rumors		
