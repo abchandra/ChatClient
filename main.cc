@@ -10,18 +10,20 @@ A basic Peerster implementation
 #include <QApplication>
 #include <QDebug>
 #include <QDateTime>
-
 #include "main.hh"
 
 #define CHAT_KEY "ChatText"
 #define ORIGIN_KEY "Origin"
 #define SEQ_KEY	"SeqNo" 
 #define STATUS_KEY "Want"
-#define SOURCE_KEY "Origin"
 #define DEST_KEY "Dest"
 #define HOP_KEY "HopLimit"
 #define LASTIP_KEY "LastIP"
 #define LASTPORT_KEY "LastPort"
+#define BLOCK_REQUEST_KEY "BlockRequest"
+#define BLOCK_REPLY_KEY "BlockReply"
+#define DATA_KEY "Data"
+#define HOPLIMIT 10
 
 quint32 generateRandom()
 {
@@ -38,8 +40,6 @@ void CustomTextEdit::keyPressEvent(QKeyEvent* e)
 
 ChatDialog::ChatDialog()
 {
-	QFileDialog dialog(this);
-	dialog.setFileMode(QFileDialog::AnyFile);
 	setWindowTitle("Peerster");
 	//Read-only text box where we display messages from everyone.
 	//This widget expands both horizontally and vertically.
@@ -58,14 +58,16 @@ ChatDialog::ChatDialog()
 	//Lay out the widgets to appear in the main window.
 	//For Qt widget and layout concepts see:
 	//http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
-	filebutton = new QPushButton("Share file...",this);
+	sharefilebutton = new QPushButton("Share file...",this);
+	downloadfilebutton = new QPushButton("Download file...",this);
 
 	layout = new QVBoxLayout();
 	layout->addWidget(privatebox);
 	layout->addWidget(textview);
 	layout->addWidget(textline);
 	layout->addWidget(hostline);
-	layout->addWidget(filebutton);
+	layout->addWidget(sharefilebutton);
+	layout->addWidget(downloadfilebutton);
 	setLayout(layout);
 
 	//Generate Origin Key : Append a random number to hostname
@@ -104,7 +106,10 @@ ChatDialog::ChatDialog()
 	//Register callback on selection of an origin on the combobox
 	connect(privatebox,SIGNAL(activated(int)),this,SLOT(handleSelectionChanged(int)));
 	//Register callback on file share button to open file sharing dialog
-	connect(filebutton,SIGNAL(released()),this,SLOT(handleFileButton()));
+	connect(sharefilebutton,SIGNAL(released()),this,SLOT(handleShareFileButton()));
+	//Register callback on download file button to open file sharing dialog
+	connect(downloadfilebutton,SIGNAL(released()),this,SLOT(handleDownloadButton()));
+
 	//Register a callback on responsetimer's timeout() signal to take necessary
 	//steps in case our rumor sending does not result in a status returned
 	responsetimer =new QTimer(this);
@@ -168,8 +173,7 @@ void ChatDialog::addPeers(QStringList argvlist){
 			QHostInfo::lookupHost(splitlist[0],this,SLOT(lookedUp(QHostInfo)));
 		}
 		else																		 //ip usable. Insert as is.
-			peerlist->append(Peer(QHostAddress(splitlist[0]),
-				newPort));
+			peerlist->append(Peer(QHostAddress(splitlist[0]), newPort));
 	}
 }
 //TODO: Extract to a separate file
@@ -187,6 +191,33 @@ PrivateMessageDialog::PrivateMessageDialog()
 	setLayout(layout);
 }
 
+DownloadFileDialog::DownloadFileDialog(QStringList origins) {
+	//set the default destination as empty
+	destinationorigin="";
+	//Populate list of destinations
+	origins.insert(0,"Select Origin to Request...");
+	fileidtext = new CustomTextEdit(this);
+	destinationbox=new QComboBox(this);
+	destinationbox->addItems(origins);
+	reqbutton = new QPushButton("Click to Request/Hit Return",this);
+	layout = new QVBoxLayout(this);
+	layout->addWidget(fileidtext);
+	layout->addWidget(destinationbox);
+	layout->addWidget(reqbutton);
+	fileidtext->setFocus(Qt::ActiveWindowFocusReason);
+	connect(destinationbox,SIGNAL(activated(int)),this,SLOT(handleSelectionChanged(int)));
+	connect(reqbutton,SIGNAL(released()),this, SLOT(handleRequestButton()));
+	connect(fileidtext, SIGNAL(returnPressed()),this, SLOT(handleRequestButton()));
+	setLayout(layout);
+}
+
+void DownloadFileDialog::handleRequestButton(){
+	// if (destinationorigin.isEmpty())
+	// 	return;
+	emit downloadfile(destinationorigin, fileidtext->toPlainText().toAscii());
+
+}
+
 void ChatDialog::handleSelectionChanged(int index)
 {
 	if (index == 0)
@@ -198,13 +229,59 @@ void ChatDialog::handleSelectionChanged(int index)
 	privatebox->setCurrentIndex(0);
 	privatedialog->show();
 }
-void ChatDialog::handleFileButton(){
+
+void DownloadFileDialog::handleSelectionChanged(int index){
+	if (index==0)
+		destinationorigin = "";
+	else
+		destinationorigin = destinationbox->itemText(index);
+}
+
+void ChatDialog::handleShareFileButton() {
 	filedialog = new QFileDialog(this);
 	filedialog->setFileMode(QFileDialog::ExistingFiles);
-	QStringList fileNames;
+	QStringList filenames;
 	if (filedialog->exec())
-	  fileNames = filedialog->selectedFiles();
-	qDebug()<<fileNames;
+	  filenames = filedialog->selectedFiles();
+	//Call FileShareManager instance to handle files
+	filemanager.addFiles(filenames);
+	delete filedialog;
+	qDebug()<<filenames;
+}
+void ChatDialog::handleDownloadButton() {
+	//create list of all nodes known
+	QStringList knownorigins;
+	QMapIterator<QString, QVariant> i(statusmap);
+ 	while (i.hasNext()) {
+ 		i.next();
+    if (i.key()!=origin)
+    	knownorigins.append(origin);
+ }
+	sharedialog = new DownloadFileDialog(knownorigins);
+	connect(sharedialog,SIGNAL(downloadfile(QString,QByteArray)),this,
+		SLOT(handleDownloadFile(QString,QByteArray)));
+	sharedialog->show();
+}
+
+void ChatDialog::handleDownloadFile(QString destination, QByteArray fileid) {
+	//Close the dialog and free it
+	qDebug()<<"BOO!";
+	sharedialog->close();
+	delete sharedialog;
+	qDebug()<<"THIS"<<fileid;
+	if (destination.isEmpty())
+		return;
+	sendBlockRequestMessage(destination,fileid);
+}
+
+void ChatDialog::sendBlockRequestMessage(QString destination, QByteArray hashval){
+	QVariantMap downloadrequestmap;
+	downloadrequestmap[ORIGIN_KEY] = QVariant(origin);	
+	downloadrequestmap[DEST_KEY] = QVariant(destination);
+	downloadrequestmap[HOP_KEY] = QVariant(HOPLIMIT);
+	downloadrequestmap[BLOCK_REQUEST_KEY] = QVariant(hashval); 								
+	QPair<QHostAddress,quint16> nexthop = hophash.value(destination);
+	writeToSocket(downloadrequestmap,nexthop.second,nexthop.first);
 }
 void ChatDialog::handleSendPm(QString privatetext)
 {
@@ -212,12 +289,24 @@ void ChatDialog::handleSendPm(QString privatetext)
 	delete privatedialog;
 	QVariantMap message;																	
 	message[CHAT_KEY] = QVariant(privatetext);	
-	message[SOURCE_KEY] = QVariant(origin);	
+	message[ORIGIN_KEY] = QVariant(origin);	
 	message[DEST_KEY] = QVariant(destinationorigin);
-	message[HOP_KEY] = QVariant(10); 								
+	message[HOP_KEY] = QVariant(HOPLIMIT); 								
 	QPair<QHostAddress,quint16> nexthop = hophash.value(destinationorigin);
 	writeToSocket(message,nexthop.second,nexthop.first);
 	//qDebug()<<"PM:"<<privatetext<<destinationorigin<<origin;
+}
+
+
+void ChatDialog::sendBlockReplyMessage(QByteArray block, QByteArray hashval, QString destination){
+	QVariantMap blockreplymap;
+	blockreplymap[ORIGIN_KEY] = QVariant(origin);
+	blockreplymap[DEST_KEY] = QVariant(destination);
+	blockreplymap[HOP_KEY] = QVariant(HOPLIMIT);
+	blockreplymap[DATA_KEY] = QVariant(block);
+	blockreplymap[BLOCK_REPLY_KEY] = QVariant(hashval);
+	QPair<QHostAddress,quint16> nexthop = hophash.value(destination);
+	writeToSocket(blockreplymap,nexthop.second,nexthop.first);
 }
 void ChatDialog::lookedUp(QHostInfo host)
 {
@@ -255,8 +344,10 @@ void ChatDialog::sendRouteRumor()
 	message[SEQ_KEY] = seqno++;
 	statusmap.insert(origin,seqno);								//Update own statusmap
 	recvdmessagemap.insertMulti(origin, message);	//Update recvdmessages	
-	SendRumorToAllPeers(message);									//Send rumor
+	sendRumorToAllPeers(message);									//Send rumor
 }
+
+
 void ChatDialog::gotReturnPressed()
 {
 	QVariantMap message;																		//Prepare user input
@@ -319,13 +410,13 @@ void ChatDialog::addNewPeer(QHostAddress sender, quint16 senderport){
   	peerlist->append(Peer(sender,senderport));
   }
 }
-void ChatDialog::SendRumorToAllPeers(QVariantMap map)
+void ChatDialog::sendRumorToAllPeers(QVariantMap map)
 {
   	int peerlistsize = peerlist->size();
 	for(int i=0; i<peerlistsize; ++i)
   	writeToSocket(map,peerlist->at(i).senderport,peerlist->at(i).sender);
 }
-QVariantMap ChatDialog::ReadDeserializeDatagram(QHostAddress* sender, quint16* senderport){
+QVariantMap ChatDialog::readDeserializeDatagram(QHostAddress* sender, quint16* senderport){
 	//Read Datagram(as a serialized QByteArray) and sender details 
 	QByteArray *serializedarr = new QByteArray();
 	serializedarr->resize(sock.pendingDatagramSize());
@@ -339,7 +430,7 @@ QVariantMap ChatDialog::ReadDeserializeDatagram(QHostAddress* sender, quint16* s
 	delete serializedarr;
 	return map;	
 }
-void ChatDialog::HandleStatusRumor(QVariantMap map, QHostAddress sender, quint16 senderport){
+void ChatDialog::handleStatusRumor(QVariantMap map, QHostAddress sender, quint16 senderport){
 			success = true;																//Reset success for timeout	
 		QVariantMap statmap=map[STATUS_KEY].toMap(); 	//Extract status
 
@@ -394,7 +485,7 @@ void ChatDialog::HandleStatusRumor(QVariantMap map, QHostAddress sender, quint16
 		}
 }
 
-void ChatDialog::HandleChatRouteRumor(QVariantMap map, QHostAddress sender, quint16 senderport){
+void ChatDialog::handleChatRouteRumor(QVariantMap map, QHostAddress sender, quint16 senderport){
 	QString incomingorigin = map.value(ORIGIN_KEY).toString();
 		quint32 incomingseqno = map.value(SEQ_KEY).toUInt();
 		/******************NAT TRAVERSAL KEYS LOOKED UP *************/
@@ -435,7 +526,7 @@ void ChatDialog::HandleChatRouteRumor(QVariantMap map, QHostAddress sender, quin
 			sendStatusMessage(senderport,sender);							//Reply with our status
 			/**********ROUTEMONGER OR RUMORMONGER**************/
       if (!map.contains(CHAT_KEY)) 		//Route messages must be sent to all peers
-      	SendRumorToAllPeers(map);
+      	sendRumorToAllPeers(map);
       else
 			 sendRumorMessage(map);				 //Rumor-monger	
 		}
@@ -445,7 +536,7 @@ void ChatDialog::HandleChatRouteRumor(QVariantMap map, QHostAddress sender, quin
       //route map to reflect that this is a direct route
         hophash.insert(incomingorigin,qMakePair(sender,senderport));
         if (!map.contains(CHAT_KEY))
-        	SendRumorToAllPeers(map);
+        	sendRumorToAllPeers(map);
 		}
 		/******************PAST OR FUTURE RUMOR**********************/
 		else {
@@ -454,13 +545,29 @@ void ChatDialog::HandleChatRouteRumor(QVariantMap map, QHostAddress sender, quin
 	  	sendStatusMessage(senderport,sender);
 		 }
 }
- void ChatDialog::HandlePrivateMessageRumor(QVariantMap map){
- 	/*******************PM INTENDED FOR THIS NODE ****************/
-		if (map.value(DEST_KEY) == origin && map.contains(CHAT_KEY)){
-			textview->append(map.value(SOURCE_KEY).toString() +
-				":Private Message : " +	map.value(CHAT_KEY).toString());
+ void ChatDialog::handlePrivateBlockRumor(QVariantMap map){
+ 	/*******************INTENDED FOR THIS NODE *******************/
+		if(map.value(DEST_KEY) == origin) {
+			if (map.contains(CHAT_KEY)){ //Private Msg
+				textview->append(map.value(ORIGIN_KEY).toString() +
+					":Private Message : " +	map.value(CHAT_KEY).toString());
+			}
+			else if (map.contains(BLOCK_REQUEST_KEY)) { //Block request
+				QByteArray hashval = map.value(BLOCK_REQUEST_KEY).toByteArray();
+				QByteArray* result = filemanager.findBlockFromHash(hashval);
+				if(result && filemanager.sanityCheck(hashval,(*result)))
+					sendBlockReplyMessage(*result,hashval,map.value(ORIGIN_KEY).toString());
+			}
+			else if (map.contains(BLOCK_REPLY_KEY) && map.contains(DATA_KEY)){ //Block reply
+				QByteArray data = map.value(DATA_KEY).toByteArray();
+				QByteArray hashval = map.value(BLOCK_REPLY_KEY).toByteArray();
+				if (filemanager.sanityCheck(hashval,data))
+					0;//TODO:save the data
+				
+				//Send a new block request if necessary
+			}
 		}
-		/******************PM INTENDED FOR ANOTHER NODE**************/
+		/******************INTENDED FOR ANOTHER NODE**************/
 		else if (map.contains(HOP_KEY)){
 			quint32 hopsremaining = map.value(HOP_KEY).toUInt() - 1;
 			if (hopsremaining > 0) {
@@ -476,16 +583,16 @@ void ChatDialog::gotNewMessage()
 {
 	//Read Datagram(as a serialized QByteArray) and retrieve sender details
 	QHostAddress sender; quint16 senderport; 
-	QVariantMap map = ReadDeserializeDatagram(&sender,&senderport);
+	QVariantMap map = readDeserializeDatagram(&sender,&senderport);
 	//Check if the immediate sender is a new source by cycling through
 	//peerlist. If it is, add it as peer for future communications.
 	addNewPeer(sender,senderport);
 	if (map.contains(STATUS_KEY))																//Status Message
-		HandleStatusRumor(map,sender,senderport);
+		handleStatusRumor(map,sender,senderport);
 	else if (map.contains(ORIGIN_KEY) && map.contains(SEQ_KEY))	//Rumor message
-		HandleChatRouteRumor(map,sender,senderport);
-	else if (map.contains(SOURCE_KEY) && map.contains(DEST_KEY))//Private Message
-		HandlePrivateMessageRumor(map);
+		handleChatRouteRumor(map,sender,senderport);
+	else if (map.contains(ORIGIN_KEY) && map.contains(DEST_KEY))//Private/Block Message
+		handlePrivateBlockRumor(map);
 	else																											 //Invalid Message
 		qDebug()<<"Invalid message:"<<map;	
 }
@@ -525,8 +632,8 @@ bool NetSocket::bind()
 
 int main(int argc, char **argv)
 {
+	QCA::Initializer qcainit;						//Initialize Crypto library
 	QApplication app(argc,argv);				//Initialize Qt toolkit
-	// QCA::Initializer qcainit;						//Initialize Crypto library
 	ChatDialog dialog;									//Create an initial chat dialog window
 	dialog.show();
 

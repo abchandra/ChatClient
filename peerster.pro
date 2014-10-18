@@ -7,7 +7,8 @@ TARGET =
 DEPENDPATH += .
 INCLUDEPATH += .
 QT += network
+CONFIG+= crypto
 
 # Input
-HEADERS += main.hh
-SOURCES += main.cc
+HEADERS += main.hh FileShareManager.hh
+SOURCES += main.cc FileShareManager.cc

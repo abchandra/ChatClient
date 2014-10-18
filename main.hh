@@ -9,9 +9,12 @@ A basic Peerster implementation
 #ifndef PEERSTER_MAIN_HH
 #define PEERSTER_MAIN_HH
 
+
 #include <QComboBox>
 #include <QDataStream>
 #include <QDialog>
+#include <QFile>
+#include <QFileDialog>
 #include <QHash>
 #include <QHostInfo>
 #include <QKeyEvent>
@@ -24,8 +27,8 @@ A basic Peerster implementation
 #include <QTimer>
 #include <QUdpSocket>
 #include <QVBoxLayout>
-#include <QFileDialog>
 
+#include "FileShareManager.hh"
 //Text Edit for chat line
 //TODO: 2-3 line bug. Consider QtPlainTextEdit
 class CustomTextEdit : public QTextEdit
@@ -39,6 +42,25 @@ class CustomTextEdit : public QTextEdit
 		void returnPressed();
 };
 
+class DownloadFileDialog : public QDialog
+{
+	Q_OBJECT
+public:
+	DownloadFileDialog(QStringList);
+
+private:
+	QVBoxLayout *layout;
+	QComboBox *destinationbox;
+	CustomTextEdit *fileidtext;
+	QPushButton* reqbutton;
+	QString destinationorigin;
+
+public slots:
+	void handleRequestButton();
+	void handleSelectionChanged(int);
+signals:
+	void downloadfile(QString,QByteArray);
+};
 class PrivateMessageDialog : public QDialog
 {
 	Q_OBJECT
@@ -94,8 +116,10 @@ class ChatDialog : public QDialog
 		void gotReturnPressed();			//Handles delivery of rumors orignating here
 		void gotNewMessage();					//Handles readyRead() for incoming datagrams
 		void handleSelectionChanged(int);//Handles activated() for origin list
-		void handleFileButton();			//Handles released() for file sharing button
+		void handleShareFileButton();	//Handles released() for file sharing button
 		void handleSendPm(QString);		//Send private message
+		void handleDownloadButton();	//Generate dialog for requesting a download
+		void handleDownloadFile(QString,QByteArray);//Send Download request
 		void sendAntiEntropyStatus();	//Implementation of anti-entropy
 		void sendRouteRumor();				//Implementation of periodic route rumoring
 		void lookedUp(QHostInfo);			//Handles completed DNS lookups
@@ -109,9 +133,11 @@ class ChatDialog : public QDialog
 		CustomTextEdit *textline;			//Text edit to enter new rumors
 		QLineEdit *hostline;					//Line edit to enter new peers
 		QComboBox *privatebox;				//List of origins for private messaging 
-		QPushButton* filebutton;			//Button to launch dialog for file sharing
+		QPushButton* sharefilebutton;	//Button to launch dialog for file sharing
+		QPushButton* downloadfilebutton;//Launch dialog for file download	
 		PrivateMessageDialog *privatedialog; //Dialog for sending private messages
 		QFileDialog* filedialog;
+		DownloadFileDialog* sharedialog;
 		NetSocket sock;								//Netsocket instance to bind to a port
 		quint32 seqno;								//Counter for rumors sent by this instance
 		QString origin;								//Our random origin key
@@ -127,23 +153,25 @@ class ChatDialog : public QDialog
 		bool success;									//Verify if a response was rcvd before timeout			
 		bool noforwarding;						//no-forwarding to test NAT traversal
 		
+		FileShareManager filemanager;
 		void sendRumorMessage(QVariantMap);	//Implementation of rumormongering
 		void sendStatusMessage(quint16 senderport, 				//Send status message to
 			QHostAddress sender = QHostAddress::LocalHost);	//specified peer
+		void sendBlockRequestMessage(QString,QByteArray); //Send a block request
 		void writeToSocket(QVariantMap message, quint16 port,//Calls writeDatagram
 		 QHostAddress host = QHostAddress::LocalHost);		//if forwading enabled
 		QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 		Peer chooseRandomPeer();	//Selects a random peer
 		void addNewPeer(QHostAddress,quint16); //add a peer if new
-		void SendRumorToAllPeers(QVariantMap); //Send Rumor to all Peers
+		void sendRumorToAllPeers(QVariantMap); //Send Rumor to all Peers
 
 		//Helper functions for gotNewMessage() to handle different types of rumors
-		void HandleStatusRumor(QVariantMap, QHostAddress, quint16);
-		void HandleChatRouteRumor(QVariantMap, QHostAddress, quint16);
-		void HandlePrivateMessageRumor(QVariantMap);
+		void handleStatusRumor(QVariantMap, QHostAddress, quint16);
+		void handleChatRouteRumor(QVariantMap, QHostAddress, quint16);
+		void handlePrivateBlockRumor(QVariantMap);
 		//Handle reading of datagram, Deserialize, and return map,sender,senderport
-		QVariantMap ReadDeserializeDatagram(QHostAddress*, quint16*);
-
+		QVariantMap readDeserializeDatagram(QHostAddress*, quint16*);
+		void sendBlockReplyMessage(QByteArray, QByteArray, QString);
 		//The recvdmessage map has origin key with multiple rumor messages as the
 		//values. Each value is thus a QVMap: QVMap<"origin",QVMap(rumor message)>
 		QVariantMap recvdmessagemap;
