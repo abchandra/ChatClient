@@ -76,14 +76,10 @@ ChatDialog::ChatDialog()
 	layout1->addWidget(downloadfilebutton);
 	layout1->addWidget(sharefilebutton);
 	 // setLayout(layout1);
-	searchdisplay = new QTextEdit(this);
-	searchdisplay->setReadOnly(true);
-	searchdisplay->append("Results from search populate here...");
 	listview = new QListWidget(this);
 	searchline = new QLineEdit(this);
 	searchline->setPlaceholderText("Search files by keywords...");
 	layout2 = new QVBoxLayout();
-	layout2->addWidget(searchdisplay);
 	layout2->addWidget(listview);
 	layout2->addWidget(searchline);
 	gridlayout = new QGridLayout();
@@ -181,8 +177,6 @@ void ChatDialog::handleSearchLine() {
 	QString querystring = searchline->text();
 	searchline->clear();
 	searchline->setPlaceholderText("search in progress...");
-	searchdisplay->clear();
-	searchdisplay->append("search results for \""+ querystring+"\":");
 	rebroadcastSearchRequest(querystring);
 }
 
@@ -227,6 +221,8 @@ void ChatDialog::handleSearch(QString searchrequest,QString source){
 
 void ChatDialog::handleRebroadcastTimer(){
 	QMapIterator<QString,quint32> i (lastbudgetmap);
+	if (!i.hasNext())
+		searchline->setPlaceholderText("Search files by keywords...");
 	while(i.hasNext()){
 		i.next();
 		rebroadcastSearchRequest(i.key(),i.value()+2);
@@ -242,17 +238,19 @@ void ChatDialog::rebroadcastSearchRequest(QString searchrequest, quint32 budget)
 	QVariantMap searchmap;
 	searchmap[ORIGIN_KEY] = QVariant(origin);	
 	searchmap[SEARCH_KEY] = QVariant(searchrequest);
-	searchmap[BUDGET_KEY] = QVariant(budget); //TODO: Incremental budgets
+	searchmap[BUDGET_KEY] = QVariant(budget); 
 	sendSearchRequestMessage(searchmap);
 }
 void ChatDialog::sendSearchRequestMessage(QVariantMap searchmap) {
  quint32 budget = searchmap.value(BUDGET_KEY).toUInt();
- quint32 minbudget = budget/peerlist->size();
- quint32 bonusleft = budget%peerlist->size();
+ quint32 minbudget = budget/(peerlist->size() - 1);
+ quint32 bonusleft = budget%(peerlist->size() - 1);
  QList<Peer>::iterator i;
  for (i=peerlist->begin();i!=peerlist->end();++i) {
  	if (minbudget + bonusleft <= 0)
  		break;
+ 	if (i->sender ==QHostAddress::LocalHost && i->senderport==sock.myPort)
+ 		continue;
  	searchmap.insert(BUDGET_KEY,minbudget+bonusleft);
  	writeToSocket(searchmap,i->senderport,i->sender);
  	if (bonusleft > 0)
@@ -317,11 +315,11 @@ void DownloadFileDialog::handleSelectionChanged(int index){
 }
 
 void ChatDialog::handleItemDoubleClicked(QListWidgetItem* item){
-	qDebug()<<"DOWNLOAD:"<<item->text();
+	// qDebug()<<"DOWNLOAD:"<<item->text();
 	QPair<QString,QByteArray> temp = searchresultmap.value(item->text());
 	QString destination = temp.first;
 	QByteArray fileid = temp.second;
-	requestedmetafiles.insert(fileid,destination);
+	requestedmetafiles.insert(fileid,qMakePair(destination,item->text()));
 	sendBlockRequestMessage(destination,fileid);
 }
 
@@ -334,7 +332,7 @@ void ChatDialog::handleShareFileButton() {
 	//Call FileShareManager instance to handle files
 	filemanager.addFiles(filenames);
 	delete filedialog;
-	qDebug()<<filenames;
+	// qDebug()<<filenames;
 }
 void ChatDialog::handleDownloadButton() {
 	//create list of all nodes known
@@ -355,12 +353,12 @@ void ChatDialog::handleDownloadFile(QString destination, QByteArray fileid) {
 	//Close the dialog and free it
 	sharedialog->close();
 	delete sharedialog;
-	qDebug()<<"THIS"<<fileid;
+	// qDebug()<<"THIS"<<fileid;
 	if (destination.isEmpty()){
 		return;
 	}
 	//update requested metafiles
-	requestedmetafiles.insert(QByteArray::fromHex(fileid),destination);
+	requestedmetafiles.insert(QByteArray::fromHex(fileid),qMakePair(destination,QString("")));
 	sendBlockRequestMessage(destination,QByteArray::fromHex(fileid));
 }
 
@@ -370,7 +368,7 @@ void ChatDialog::sendBlockRequestMessage(QString destination, QByteArray hashval
 	downloadrequestmap[DEST_KEY] = QVariant(destination);
 	downloadrequestmap[HOP_KEY] = QVariant(HOPLIMIT);
 	downloadrequestmap[BLOCK_REQUEST_KEY] = QVariant(hashval);
-	qDebug()<<"SENDING A BLOCK REQUEST FOR"<<hashval.toHex()<<"TO "<<destination; 								
+	// qDebug()<<"SENDING A BLOCK REQUEST FOR"<<hashval.toHex()<<"TO "<<destination; 								
 	QPair<QHostAddress,quint16> nexthop = hophash.value(destination);
 	writeToSocket(downloadrequestmap,nexthop.second,nexthop.first);
 }
@@ -388,9 +386,6 @@ void ChatDialog::handleSendPm(QString privatetext)
 	//qDebug()<<"PM:"<<privatetext<<destinationorigin<<origin;
 }
 void ChatDialog::handleSearchReplyRumor(QVariantMap map) {
-	//TODO:
-	//append to the list view
-	//append to some other list of fileids
 	if (!map.contains(MATCH_NAME_KEY) || !map.contains(MATCH_ID_KEY))
 		return;
 	QVariantList filenames = map.value(MATCH_NAME_KEY).toList();
@@ -444,9 +439,7 @@ void ChatDialog::lookedUp(QHostInfo host)
      QHostAddress address = host.addresses()[0];
      QMap<QString,quint16>::iterator i = unresolvedhostmap.find(hostname);
      while (i!=unresolvedhostmap.end() && i.key()==hostname) {
-     	 peerlist->append(Peer(address,i.value(),hostname));  	
-     	 
-   	 qDebug()<<"Peer added on lookup"<<hostname<<i.value()<<address;
+     	 peerlist->append(Peer(address,i.value(),hostname));  	     	 
      	 ++i; 
    	 }
    	 unresolvedhostmap.remove(hostname);
@@ -671,6 +664,8 @@ void ChatDialog::handleChatRouteRumor(QVariantMap map, QHostAddress sender, quin
 }
 
 void ChatDialog::handleSearchRequestRumor(QVariantMap map){
+	if (map.value(ORIGIN_KEY) == origin)
+		return;
 	QString querystring = map.value(SEARCH_KEY).toString();
 	QString source = map.value(ORIGIN_KEY).toString();
 	handleSearch(querystring,source); 
@@ -703,8 +698,9 @@ void ChatDialog::handleSearchRequestRumor(QVariantMap map){
 				if (filemanager.sanityCheck(hashval,data)){
 					QByteArray nexthash="";
 					if (requestedmetafiles.contains(hashval)) {
+						QString filename = requestedmetafiles.value(hashval).second;
 						requestedmetafiles.remove(hashval);
-						 nexthash = filemanager.addDownload(hashval,data,source);
+						 nexthash = filemanager.addDownload(hashval,data,source,filename);
 					}
 					else{
 						nexthash = filemanager.addBlock(hashval,data,source);
@@ -715,7 +711,7 @@ void ChatDialog::handleSearchRequestRumor(QVariantMap map){
 				}
 			}
 			else if (map.contains(SEARCH_KEY)){
-				qDebug()<<"handle search request for "<<map.value(SEARCH_KEY).toString();
+				// qDebug()<<"handle search request for "<<map.value(SEARCH_KEY).toString();
 				handleSearchRequestRumor(map);
 			}
 			else if(map.contains(SEARCH_REPLY_KEY)){

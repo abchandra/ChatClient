@@ -27,7 +27,7 @@ public:
 	void addFiles(QStringList);
 	QByteArray* findBlockFromHash(QByteArray);
 	bool sanityCheck(QByteArray,QByteArray);
-	QByteArray addDownload(QByteArray,QByteArray,QString);
+	QByteArray addDownload(QByteArray,QByteArray,QString,QString);
 	QByteArray addBlock(QByteArray,QByteArray,QString);
 	QByteArray nexthashval(QByteArray);
 	void writeToFile(FileData);

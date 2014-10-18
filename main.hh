@@ -134,7 +134,6 @@ class ChatDialog : public QDialog
 		QGridLayout *gridlayout;
 		QVBoxLayout *layout1;					//Layout of GUI
 		QVBoxLayout * layout2;			
-		QTextEdit* searchdisplay;
 		QLineEdit* searchline;
 		QTextEdit *textview; 					//Main display view for rumors sent and rcvd
 		CustomTextEdit *textline;			//Text edit to enter new rumors
@@ -155,7 +154,7 @@ class ChatDialog : public QDialog
 		QList<Peer> *peerlist;				//list of known peers
 		QMap<QString,quint16> unresolvedhostmap; //Hosts currently being lookedup
 		QHash<QString,QPair<QHostAddress,quint16> > hophash;//next hop table(routing)
-		QMap<QByteArray,QString> requestedmetafiles;
+		QMap<QByteArray,QPair<QString,QString> > requestedmetafiles;
 		QMap<QString,QPair<QString,QByteArray> > searchresultmap;
 		QTimer *responsetimer;				//Timer for timeouts on unresponsive peer
 		QTimer *entropytimer;					//Timer for firing off anti-entropy messages
