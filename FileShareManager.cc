@@ -31,7 +31,7 @@ void FileShareManager::prepareFileData(QString filename) {
 		filedata.blocklistfile = blocklistfile;
 		filedata.blocklisthash = QCA::Hash("sha1").hash(blocklistfile).toByteArray();
 		sharedfiles.append(filedata);
-		qDebug()<<"file:"<<filedata.filename<<"##size:"<<filedata.blocklistfile.size()/20<<"##blfhash:"<<filedata.blocklisthash.toHex();
+		//qDebug()<<"file:"<<filedata.filename<<"##size:"<<filedata.blocklistfile.size()/20<<"##blfhash:"<<filedata.blocklisthash.toHex();
 }
 
 QByteArray* FileShareManager::findBlockFromHash(QByteArray hashval) {
