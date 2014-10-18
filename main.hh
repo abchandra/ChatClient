@@ -15,6 +15,7 @@ A basic Peerster implementation
 #include <QDialog>
 #include <QFile>
 #include <QFileDialog>
+#include <QGridLayout>
 #include <QHash>
 #include <QHostInfo>
 #include <QKeyEvent>
@@ -27,7 +28,7 @@ A basic Peerster implementation
 #include <QTimer>
 #include <QUdpSocket>
 #include <QVBoxLayout>
-
+#include <QListWidget>
 #include "FileShareManager.hh"
 //Text Edit for chat line
 //TODO: 2-3 line bug. Consider QtPlainTextEdit
@@ -124,17 +125,24 @@ class ChatDialog : public QDialog
 		void sendRouteRumor();				//Implementation of periodic route rumoring
 		void lookedUp(QHostInfo);			//Handles completed DNS lookups
 		void addPeer();								//Add a new peer from hostline
+		void handleSearchLine();
 		void checkReceipt();					//Implements timeouts against
 																	//non-responsive peers
-
+		void handleItemDoubleClicked(QListWidgetItem*);
+		void handleRebroadcastTimer();
 	private:
-		QVBoxLayout *layout;					//Layout of GUI
+		QGridLayout *gridlayout;
+		QVBoxLayout *layout1;					//Layout of GUI
+		QVBoxLayout * layout2;			
+		QTextEdit* searchdisplay;
+		QLineEdit* searchline;
 		QTextEdit *textview; 					//Main display view for rumors sent and rcvd
 		CustomTextEdit *textline;			//Text edit to enter new rumors
 		QLineEdit *hostline;					//Line edit to enter new peers
 		QComboBox *privatebox;				//List of origins for private messaging 
 		QPushButton* sharefilebutton;	//Button to launch dialog for file sharing
 		QPushButton* downloadfilebutton;//Launch dialog for file download	
+		QListWidget* listview;
 		PrivateMessageDialog *privatedialog; //Dialog for sending private messages
 		QFileDialog* filedialog;
 		DownloadFileDialog* sharedialog;
@@ -142,14 +150,17 @@ class ChatDialog : public QDialog
 		quint32 seqno;								//Counter for rumors sent by this instance
 		QString origin;								//Our random origin key
 		QString destinationorigin;		//Destination for current private message
+		QMap<QString,quint32> lastbudgetmap;
 		QVariantMap currentrumor;			//Current rumor for rumor-mongering
 		QList<Peer> *peerlist;				//list of known peers
 		QMap<QString,quint16> unresolvedhostmap; //Hosts currently being lookedup
 		QHash<QString,QPair<QHostAddress,quint16> > hophash;//next hop table(routing)
 		QMap<QByteArray,QString> requestedmetafiles;
+		QMap<QString,QPair<QString,QByteArray> > searchresultmap;
 		QTimer *responsetimer;				//Timer for timeouts on unresponsive peer
 		QTimer *entropytimer;					//Timer for firing off anti-entropy messages
 		QTimer *routetimer;						//Timer for firing off periodic route rumors		
+		QTimer *rebroadcasttimer;
 		bool success;									//Verify if a response was rcvd before timeout			
 		bool noforwarding;						//no-forwarding to test NAT traversal
 		
@@ -172,6 +183,13 @@ class ChatDialog : public QDialog
 		//Handle reading of datagram, Deserialize, and return map,sender,senderport
 		QVariantMap readDeserializeDatagram(QHostAddress*, quint16*);
 		void sendBlockReplyMessage(QByteArray, QByteArray, QString);
+		void handleSearch(QString,QString);
+		void rebroadcastSearchRequest(QString,quint32 = 2);
+		void sendSearchRequestMessage(QVariantMap);
+		void sendSearchReplyMessage(QString,QString,QVariantList,QByteArray);
+		void handleSearchReplyRumor(QVariantMap);
+		void handleSearchRequestRumor(QVariantMap);
+
 		//The recvdmessage map has origin key with multiple rumor messages as the
 		//values. Each value is thus a QVMap: QVMap<"origin",QVMap(rumor message)>
 		QVariantMap recvdmessagemap;

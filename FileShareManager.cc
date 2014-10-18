@@ -1,6 +1,6 @@
 #include "FileShareManager.hh"
 #include <QDebug>
-
+#include <QVariant>
 void FileShareManager::addFiles(QStringList filenames) {
 	QStringList::iterator i;
 	for (i=filenames.begin(); i!= filenames.end();++i)
@@ -12,7 +12,8 @@ void FileShareManager::prepareFileData(QString filename) {
 		return;
 
 		FileData filedata;
-		filedata.filename = filename;
+		QStringList splitlist = filename.split("/");
+		filedata.filename = splitlist.last();
 		QByteArray blocks = file.readAll();
 		file.close();
 		filedata.filesize = blocks.size();
@@ -31,7 +32,7 @@ void FileShareManager::prepareFileData(QString filename) {
 		filedata.blocklistfile = blocklistfile;
 		filedata.blocklisthash = QCA::Hash("sha1").hash(blocklistfile).toByteArray();
 		sharedfiles.append(filedata);
-		//qDebug()<<"file:"<<filedata.filename<<"##size:"<<filedata.blocklistfile.size()/20<<"##blfhash:"<<filedata.blocklisthash.toHex();
+		qDebug()<<"file:"<<filedata.filename<<"##size:"<<filedata.blocklistfile.size()/20<<"##blfhash:"<<filedata.blocklisthash.toHex();
 }
 
 QByteArray* FileShareManager::findBlockFromHash(QByteArray hashval) {
@@ -81,8 +82,8 @@ QByteArray FileShareManager::addBlock(QByteArray hashval, QByteArray block, QStr
 			if (i->nextdownloadblock.size() <=const_hashsize){
 				writeToFile(*i);
 				inprogressdownloads.erase(i);
-				//qDebug()<<"WOOT DONE!";
-				return "";//TODO: Write file and remove from this list
+				qDebug()<<"WOOT DONE!";
+				return "";
 			}
 			else{
 			i->nextdownloadblock=i->nextdownloadblock.mid(const_hashsize); //next block
@@ -107,4 +108,17 @@ void FileShareManager::writeToFile(FileData filedata){
 	file.open(QIODevice::WriteOnly);
 	file.write(filedata.blocks);
 	file.close();
+}
+
+void FileShareManager::keywordSearch(QString query,QVariantList& matches,QByteArray& result){
+	QList<FileData>::iterator i;
+	qDebug()<<"matching "<<query<<"....";
+	for (i=sharedfiles.begin(); i!= sharedfiles.end();++i){
+		QStringList splitlist = i->filename.split(" ");
+		if (splitlist.contains(query)){
+			qDebug()<<"A match:"<<i->filename;
+			matches.append(QVariant(i->filename));
+			result.append(i->blocklisthash);
+		}
+	}
 }
