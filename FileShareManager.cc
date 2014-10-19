@@ -118,7 +118,7 @@ void FileShareManager::writeToFile(FileData filedata){
 	msgBox.exec();
 }
 
-void FileShareManager::keywordSearch(QString querystring,QVariantList& matches,QByteArray& result){
+void FileShareManager::keywordSearch(QString querystring,QVariantList& matches,QVariantList& result){
 	QString query = querystring.toLower();
 	QList<FileData>::iterator i;
 	for (i=sharedfiles.begin(); i!= sharedfiles.end();++i){
@@ -127,7 +127,7 @@ void FileShareManager::keywordSearch(QString querystring,QVariantList& matches,Q
 		for (j=splitlist.begin();j!=splitlist.end();++j){
 			if ((j->toLower()).contains(query)){
 				matches.append(QVariant(i->filename));
-				result.append(i->blocklisthash);
+				result.append(QVariant(i->blocklisthash));
 				break;
 			}
 		}

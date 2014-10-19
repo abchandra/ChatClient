@@ -211,7 +211,7 @@ void ChatDialog::handleSearch(QString searchrequest,QString source){
 	QStringList splitlist = searchrequest.split(" ");
 	QStringList::iterator i;
 	QVariantList matchNames;
-	QByteArray result="";
+	QVariantList result;
 	for (i = splitlist.begin(); i!=splitlist.end();++i)
 		filemanager.keywordSearch((*i),matchNames,result);
 	if (!result.isEmpty())
@@ -320,6 +320,7 @@ void ChatDialog::handleItemDoubleClicked(QListWidgetItem* item){
 	QString destination = temp.first;
 	QByteArray fileid = temp.second;
 	requestedmetafiles.insert(fileid,qMakePair(destination,item->text()));
+	qDebug()<<"file id"<<fileid.toHex();
 	sendBlockRequestMessage(destination,fileid);
 }
 
@@ -389,22 +390,24 @@ void ChatDialog::handleSearchReplyRumor(QVariantMap map) {
 	if (!map.contains(MATCH_NAME_KEY) || !map.contains(MATCH_ID_KEY))
 		return;
 	QVariantList filenames = map.value(MATCH_NAME_KEY).toList();
-	QByteArray fileids = map.value(MATCH_ID_KEY).toByteArray();
+	QVariantList fileids = map.value(MATCH_ID_KEY).toList();
 	QString source = map.value(ORIGIN_KEY).toString();
-	QVariantList::iterator i;
-	for(i=filenames.begin();i!=filenames.end();++i){
+	QVariantList::iterator i,j;
+	j=fileids.begin();
+	for(i=filenames.begin();i!=filenames.end() && j!=fileids.end();++i){
 		if (!searchresultmap.contains((*i).toString())){
 		QString filename =(*i).toString();
-		QByteArray fileid = fileids.left(HASHSIZE);
+		QByteArray fileid = (*j).toByteArray();
+		// qDebug()<<"incoming filename:"<<filename<<"#incoming file id:"<<fileid;
 		searchresultmap.insert(filename,qMakePair(source,fileid));
 		listview->addItem(filename); 
 		}
-		fileids = fileids.mid(HASHSIZE);
+		++j;
 	}
 
 }
 void ChatDialog::sendSearchReplyMessage(QString source, QString querystring,
- QVariantList matchNames, QByteArray result) {
+ QVariantList matchNames, QVariantList result) {
 	QVariantMap blockreplymap;
 	blockreplymap[ORIGIN_KEY] = QVariant(origin);
 	blockreplymap[DEST_KEY] = QVariant(source);

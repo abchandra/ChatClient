@@ -31,7 +31,7 @@ public:
 	QByteArray addBlock(QByteArray,QByteArray,QString);
 	QByteArray nexthashval(QByteArray);
 	void writeToFile(FileData);
-	void keywordSearch(QString,QVariantList&,QByteArray&);
+	void keywordSearch(QString,QVariantList&,QVariantList&);
 
 private:
 	static const int const_blocksize = BLOCKSIZE;

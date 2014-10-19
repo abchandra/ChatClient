@@ -185,7 +185,7 @@ class ChatDialog : public QDialog
 		void handleSearch(QString,QString);
 		void rebroadcastSearchRequest(QString,quint32 = 2);
 		void sendSearchRequestMessage(QVariantMap);
-		void sendSearchReplyMessage(QString,QString,QVariantList,QByteArray);
+		void sendSearchReplyMessage(QString,QString,QVariantList,QVariantList);
 		void handleSearchReplyRumor(QVariantMap);
 		void handleSearchRequestRumor(QVariantMap);
 
