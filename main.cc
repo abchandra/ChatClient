@@ -225,7 +225,7 @@ void ChatDialog::handleRebroadcastTimer(){
 		searchline->setPlaceholderText("Search files by keywords...");
 	while(i.hasNext()){
 		i.next();
-		rebroadcastSearchRequest(i.key(),i.value()+2);
+		rebroadcastSearchRequest(i.key(),i.value()*2);
 	}
 }
 void ChatDialog::rebroadcastSearchRequest(QString searchrequest, quint32 budget) {

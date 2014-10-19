@@ -68,6 +68,10 @@ QByteArray FileShareManager::addDownload(QByteArray blocklisthash,QByteArray blo
 	filedata.blocklistfile = blocklistfile;
 	filedata.nextdownloadblock=blocklistfile;
 	filedata.hostorigin = host;
+	if (blocklistfile.isEmpty()) {
+		writeToFile(filedata);
+		return "";
+	}
 	inprogressdownloads.append(filedata);
 	return nexthashval(filedata.nextdownloadblock);
 
