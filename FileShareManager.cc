@@ -1,6 +1,7 @@
 #include "FileShareManager.hh"
 #include <QVariant>
 #include <QMessageBox>
+#include <QDebug>
 void FileShareManager::addFiles(QStringList filenames) {
 	QStringList::iterator i;
 	for (i=filenames.begin(); i!= filenames.end();++i)
@@ -32,6 +33,7 @@ void FileShareManager::prepareFileData(QString filename) {
 		filedata.blocklistfile = blocklistfile;
 		filedata.blocklisthash = QCA::Hash("sha1").hash(blocklistfile).toByteArray();
 		sharedfiles.append(filedata);
+		qDebug()<<"uploaded:"<<filedata.blocklisthash.toHex();
 }
 
 QByteArray* FileShareManager::findBlockFromHash(QByteArray hashval) {

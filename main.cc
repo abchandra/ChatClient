@@ -320,7 +320,7 @@ void ChatDialog::handleItemDoubleClicked(QListWidgetItem* item){
 	QString destination = temp.first;
 	QByteArray fileid = temp.second;
 	requestedmetafiles.insert(fileid,qMakePair(destination,item->text()));
-	qDebug()<<"file id"<<fileid.toHex();
+	// qDebug()<<"file id"<<fileid.toHex();
 	sendBlockRequestMessage(destination,fileid);
 }
 
