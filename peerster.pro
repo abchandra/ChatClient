@@ -10,5 +10,5 @@ QT += network
 CONFIG+= crypto
 
 # Input
-HEADERS += main.hh FileShareManager.hh
-SOURCES += main.cc FileShareManager.cc
+HEADERS += CustomTextEdit.hh SmallDialogs.hh ChatDialog.hh FileShareManager.hh
+SOURCES += main.cc CustomTextEdit.cc SmallDialogs.cc ChatDialog.cc FileShareManager.cc
