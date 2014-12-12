@@ -34,30 +34,37 @@ A basic Peerster implementation
 class Node
 {
 public:
-	Node(QHostAddress a,quint16 p,quint32 k,Node* s=0,Node* pr=0){
-		address = a; port = p; key = k;
-		successor = s; predecessor = pr;
-	}
+	Node(){};
+	~Node(){};
 	Node(const Node &n){
 		address = n.address;port = n.port; key = n.key;
-		successor=n.successor; predecessor=n.predecessor;
+	}
+
+	Node(QHostAddress a,quint16 p,quint32 k){
+		address = a; port = p; key = k;
 	}
 	QHostAddress address;
 	quint16 port;
 	quint32 key;
-	Node* predecessor;
-	Node* successor;
 };
 
-class fingerTableEntry
+class FingerTableEntry
 {
 public:
+	FingerTableEntry(){};
+	FingerTableEntry(const FingerTableEntry &f){
+		start = f.start; end = f.end;
+		node = f.node;
+	};
+	~FingerTableEntry(){};
 	//Refer Table 1 of Chord paper
 	quint32 start;	//inclusive
 	quint32 end;		//exclusive
-	Node* node;
+	Node node;
 };
-
+Q_DECLARE_METATYPE(FingerTableEntry);
+Q_DECLARE_METATYPE(FingerTableEntry*);
+Q_DECLARE_METATYPE(Node);
 //Main class for chordster instance
 class ChordNode : public QDialog
 {
@@ -72,26 +79,38 @@ public slots:
 private:
 	static const quint32 idlength = CHORD_BITS;
 	static const quint32 idSpaceSize = 1<<idlength;
-	NetSocket sock;								//Netsocket instance to bind to a port
-	Node* selfNode;
-	fingerTableEntry* finger;
+	
+
 	QVBoxLayout *layout1;					//Layout of GUI
 	QPushButton* sharefilebutton;	//Button to launch dialog for file sharing
 	QPushButton* downloadfilebutton;//Launch dialog for file download	
 
+
+	NetSocket sock;								//Netsocket instance to bind to a port
+	Node* selfNode;
+	FingerTableEntry* finger;
+	Node predecessor;
+	Node successor;
+	
+	enum Mode{PRED, SUCC, JOIN};
+	QHash<quint32,Mode> predecessorRequestHash;
+	QHash<quint32,Node> joinRequestHash;
 	void InitializeIdentifierCircle();//Init a new id circle
 	quint32 getKeyFromName(QString);	//Create chord key from given QString		
-	void setCreateChordKey();			//Create and store the chord key for node
+	void setCreateSelfNode();			//Create and store the chord key for node
 	void sendJoinRequest(QHostAddress, quint16); // Send request to join chord
 	void writeToSocket(QVariantMap, quint16,QHostAddress);//Calls writeDatagram
 	QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 	QVariantMap readDeserializeDatagram(QHostAddress*, quint16*);
-	void handleJoinRequest(QString,QHostAddress,quint16);
-	Node* findSuccessor(quint32);
-	Node* findPredecessor(quint32);
-	Node* closestPrecedingFinger(quint32);
-
-
+	void handleJoinRequest(Node);
+	void SetFingerTableIntervals();
+	void findSuccessor(quint32, Node, Mode m=SUCC);
+	void findPredecessor(quint32, Node);
+	Node closestPrecedingFinger(quint32);
+	void sendPredecessorRequest(Node,quint32,Node);
+	void sendPredecessorMessage(quint32,Node);
+	void handleFoundPredecessor(QVariantMap);
+	bool isInInterval(quint32,quint32,quint32,bool,bool);
 };
 
 #endif // CHORDSTER_MAIN_HH
