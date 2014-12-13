@@ -51,18 +51,11 @@ public:
 class FingerTableEntry
 {
 public:
-	FingerTableEntry(){};
-	FingerTableEntry(const FingerTableEntry &f){
-		start = f.start; end = f.end;
-		node = f.node;
-	};
-	~FingerTableEntry(){};
 	//Refer Table 1 of Chord paper
 	quint32 start;	//inclusive
 	quint32 end;		//exclusive
 	Node node;
 };
-Q_DECLARE_METATYPE(FingerTableEntry);
 Q_DECLARE_METATYPE(Node);
 //Main class for chordster instance
 class ChordNode : public QDialog
@@ -87,13 +80,13 @@ private:
 
 	NetSocket sock;								//Netsocket instance to bind to a port
 	Node* selfNode;
+	Node joinNode;
 	FingerTableEntry* finger;
 	Node predecessor;
 	Node successor;
 	
 	enum Mode{PRED, SUCC, JOIN};
-	QHash<quint32,Mode> predecessorRequestHash;
-	QHash<quint32,Node> joinRequestHash;
+	QHash<quint32,Mode> neighborRequestHash;
 	void InitializeIdentifierCircle();//Init a new id circle
 	quint32 getKeyFromName(QString);	//Create chord key from given QString		
 	void setCreateSelfNode();			//Create and store the chord key for node
@@ -101,16 +94,16 @@ private:
 	void writeToSocket(QVariantMap, quint16,QHostAddress);//Calls writeDatagram
 	QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 	QVariantMap readDeserializeDatagram(QHostAddress*, quint16*);
-	void handleJoinRequest(Node);
 	void SetFingerTableIntervals();
 	void findSuccessor(quint32, Node, Mode m=SUCC);
-	void findPredecessor(quint32, Node);
+	void findNeighbors(quint32, Node);
 	Node closestPrecedingFinger(quint32);
-	void sendPredecessorRequest(Node,quint32,Node);
-	void sendPredecessorMessage(quint32,Node);
-	void handleFoundPredecessor(QVariantMap);
+	void sendNeighborRequest(Node,quint32,Node);
+	void sendNeighborMessage(quint32,Node);
+	void handleFoundNeighbor(QVariantMap);
 	bool isInInterval(quint32,quint32,quint32,bool,bool);
-	void sendJoinReply(quint32,Node,Node);
+	void join(Node,Node);
+	void initFingerTable(Node,Node);
 };
 
 #endif // CHORDSTER_MAIN_HH
