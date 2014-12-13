@@ -63,7 +63,6 @@ public:
 	Node node;
 };
 Q_DECLARE_METATYPE(FingerTableEntry);
-Q_DECLARE_METATYPE(FingerTableEntry*);
 Q_DECLARE_METATYPE(Node);
 //Main class for chordster instance
 class ChordNode : public QDialog
@@ -111,6 +110,7 @@ private:
 	void sendPredecessorMessage(quint32,Node);
 	void handleFoundPredecessor(QVariantMap);
 	bool isInInterval(quint32,quint32,quint32,bool,bool);
+	void sendJoinReply(quint32,Node,Node);
 };
 
 #endif // CHORDSTER_MAIN_HH
