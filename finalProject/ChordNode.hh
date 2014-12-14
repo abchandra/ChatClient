@@ -30,7 +30,7 @@ A basic Peerster implementation
 #include <QVBoxLayout>
 #include <QListWidget>
 
-#define CHORD_BITS 16
+#define CHORD_BITS 10
 class Node
 {
 public:
@@ -99,7 +99,7 @@ private:
 	void findNeighbors(quint32, Node);
 	Node closestPrecedingFinger(quint32);
 	void sendNeighborRequest(Node,quint32,Node);
-	void sendNeighborMessage(quint32,Node);
+	void sendNeighborMessage(quint32,Node,bool isGuess=false);
 	void handleFoundNeighbor(QVariantMap,QHostAddress,quint32);
 	bool isInInterval(quint32,quint32,quint32,bool,bool);
 	void join(Node,Node);

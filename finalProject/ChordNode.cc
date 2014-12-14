@@ -49,7 +49,6 @@ ChordNode::ChordNode(){
 	printTimer=new QTimer(this);
 	connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
 	printTimer->start(5000);
-
 	//Dialog to connect to a chord node
 
 	//Here we need preserve join conditions from 4.4
@@ -71,7 +70,7 @@ QDataStream& operator>>(QDataStream &in, Node &n){
 
 
 void ChordNode::setCreateSelfNode(){
- 	if(!sock.hostInfo)
+ 	if (!sock.hostInfo)
  		return;
 	QHostAddress address = sock.hostInfo->addresses()[0];
 	quint16 port = sock.myPort;
@@ -103,6 +102,8 @@ quint32 ChordNode::getKeyFromName(QString name){
 	return x%(1<<idlength);
 }
 void ChordNode::sendJoinRequest(QHostAddress host, quint16 port){
+	if (host==selfNode->address && port==selfNode->port)
+		return;
 	neighborRequestHash.insert(selfNode->key,JOIN);
 	joinNode = Node(host,port,0);
 	sendNeighborRequest(joinNode,selfNode->key,(*selfNode));
@@ -172,28 +173,45 @@ void ChordNode::InitializeIdentifierCircle(){
 }
 
 bool ChordNode::isInInterval(quint32 key,quint32 nodeKey, quint32 succKey, bool leftInc, bool rightInc){
+	if (nodeKey==succKey)
+		return true;
 	//check left and right endpoints
 	if ((leftInc && key==nodeKey) || (rightInc && key==succKey))
 		return true;
 	//check interval, enpoints exclusive
-	else if (nodeKey>=succKey)
-		return (key>succKey); //succKey---nodeKey---key
+	else if (nodeKey>succKey)
+		return ((key>nodeKey && key>succKey) ||	  //succKey---nodeKey---key
+						(key<nodeKey && key<succKey));		//key---succKey---nodeKey
 	else
 		return (key>nodeKey && key<succKey); //nodeKey---key---succKey
 }
 
 void ChordNode::findNeighbors(quint32 key,Node requestnode){
-	sock.delay(5);
 	qDebug()<<"finding neighbor"<<key<<"for"<<requestnode.address;
-	if(isInInterval(key,selfNode->key,successor.key,false,true))
+	if (isInInterval(key,selfNode->key,successor.key,false,true))
 		sendNeighborMessage(key,requestnode);
-	else
-		sendNeighborRequest(closestPrecedingFinger(key),key,requestnode);
+	else{
+		Node n= closestPrecedingFinger(key);
+		if (n.key!=selfNode->key){
+			qDebug()<<"Asking"<<n.key;
+			sendNeighborRequest(n,key,requestnode);
+		}
+		else {
+			//Warning: Dicey patch to apparent oversight in paper pseudocode
+			//This case deals with finger tables being unstable to such an
+			//extent that the findneighbor operation cannot resolve the 
+			//neighbors correctly. This is very true for the first node
+			//or two to join. Hopefully, we will implement stability to
+			//fix this up anyway.
+			qDebug()<<"Sending self as succ/pred to break tie";
+			sendNeighborMessage(key,requestnode,true);		
+		}
+	}
 }
 
 Node ChordNode::closestPrecedingFinger(quint32 key){
 	for(int i=CHORD_BITS-1;i>=0;--i){
-		if(isInInterval(finger[i].node.key,selfNode->key,key,false,false))
+		if (isInInterval(finger[i].node.key,selfNode->key,key,false,false))
 			return finger[i].node;
 	}
 	qDebug()<<"Err: Self node is the closest to key";
@@ -208,14 +226,16 @@ void ChordNode::sendNeighborRequest(Node dest,quint32 key,Node requestNode){
 	writeToSocket(message,dest.port,dest.address);
 }
 
-void ChordNode::sendNeighborMessage(quint32 key, Node requestNode){
+void ChordNode::sendNeighborMessage(quint32 key, Node requestNode,bool isGuess){
 	QVariantMap message;
 	QVariant qvNode; qvNode.setValue(*selfNode);
 	message.insert(NEIGHBOR_REPLY_KEY,key);
 	message.insert(PREDECESSOR_KEY,qvNode);
-	qvNode.setValue(successor);
+	if (!isGuess)
+		qvNode.setValue(successor);
 	message.insert(SUCCESSOR_KEY,qvNode);
-	qDebug()<<"sending Predecessor & Successor";
+
+	qDebug()<<"sending myself neighbor"<<key<<"for"<<requestNode.key;
 	writeToSocket(message,requestNode.port,requestNode.address);
 }
 
@@ -228,20 +248,29 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 	Node pred = map.value(PREDECESSOR_KEY).value<Node>();
 	Node succ = map.value(SUCCESSOR_KEY).value<Node>();
 	Node n = Node(address,port,key);
-	if (!neighborRequestHash.contains(key))
+	if (!neighborRequestHash.contains(key)){
+		qDebug()<<"Unexpected Neighbor Reply";
 		return;
+	}
 	qint32 index = neighborRequestHash.value(key);	
 	if (index==JOIN && key==selfNode->key)
 		join(pred,succ);
-	else if (index<(int)idlength && 
-		isInInterval(key,finger[index].start,finger[index].end,true,false)){
-			finger[index].node=n;
-			// while(index<idlength && isInInterval(finger[index+1].start,selfNode->key,finger[index].node.key,true,false))
-			// 	finger[index+1].node=finger[index++].node;
-	}
-	else if(index==UPDATEPREDECESSOR && updatePredecessorHash.contains(key)){
-		sendUpdateMessage(n,(*selfNode),updatePredecessorHash.value(key));
+	else if (index==UPDATEPREDECESSOR && updatePredecessorHash.contains(key)){
+		qDebug()<<"Asking"<<pred.key<<"to update at"<<updatePredecessorHash.value(key)<<"if needed";
+		sendUpdateMessage(pred,(*selfNode),updatePredecessorHash.value(key));
 		updatePredecessorHash.remove(key);
+	}
+	else if (index>0 && index<(int)idlength && finger[index].start==key){ 
+		qDebug()<<"My finger"<<index<<"is"<<succ.key;
+		finger[index].node=succ;
+		if (neighborRequestHash.size()<=1){
+			neighborRequestHash.remove(key);
+			updateOthers(); 
+			return;
+		}
+			// while(index<(int)idlength 
+			// 	&& isInInterval(finger[index+1].start,selfNode->key,finger[index].node.key,true,false))
+			// 	finger[index+1].node=finger[index++].node;
 	}
 
 	neighborRequestHash.remove(key);
@@ -249,10 +278,7 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 
 void ChordNode::join(Node pred, Node succ){
 	qDebug()<<"Join called";
-	initFingerTable(pred,succ);
-	sock.delay(1); //Allow for some time for change propogation
-	// updateOthers();
-		
+	initFingerTable(pred,succ);		
 }
 
 void ChordNode::initFingerTable(Node pred, Node succ){
@@ -289,10 +315,17 @@ void ChordNode::handleUpdateMessage(QVariantMap map){
 			qDebug()<<"Incorrect Predecessor Update Message";
 		return;
 	}
-	if(index==0 && isInInterval(n.key,selfNode->key,successor.key,true,false)){
+	qDebug()<<"Update Message Received:"<<"["<<finger[index].start<<","<<finger[index].end<<")	:"<<"current:"<<
+	finger[index].node.key<<"suggested:"<<n.key;
+
+	if (index==0 && isInInterval(n.key,selfNode->key,successor.key,true,false)){
 		successor = n; finger[0].node=n;
 	}
-	if(index<idlength && isInInterval(n.key,selfNode->key,finger[index].node.key,true,false)){
+	if (index<idlength && isInInterval(n.key,selfNode->key,finger[index].node.key,true,false)){
+		
+		if (n.key==selfNode->key) //Message updates gone full cycle
+			return;
+		qDebug()<<"Accepted.";
 		finger[index].node=n;
 		sendUpdateMessage(predecessor,n,index);
 	}
@@ -300,10 +333,10 @@ void ChordNode::handleUpdateMessage(QVariantMap map){
 
 void ChordNode::updateOthers(){
 	for(quint32 i=0; i<idlength;++i){
-		quint32 prednum = 1<<(i);
-		neighborRequestHash.insert(prednum,UPDATEPREDECESSOR);
-		updatePredecessorHash.insert(prednum,i);
-		findNeighbors((selfNode->key - prednum)%idSpaceSize,(*selfNode));
+		quint32 key = (selfNode->key - (1<<i))%idSpaceSize;
+		neighborRequestHash.insert(key,UPDATEPREDECESSOR);
+		updatePredecessorHash.insert(key,i);
+		findNeighbors(key,(*selfNode));
 	}
 }
 void ChordNode::printStatus(){
@@ -311,5 +344,5 @@ void ChordNode::printStatus(){
 	<<"Predecessor"<<predecessor.address<<predecessor.port;
 	qDebug()<<"FingerTable";
 	for(uint i=0;i<idlength;++i)
-		qDebug()<<"["<<finger[i].start<<","<<finger[i].end<<")	:"<<(finger[i].node.address)<<finger[i].node.port; 
+		qDebug()<<"["<<finger[i].start<<","<<finger[i].end<<")	:"<<finger[i].node.key<<(finger[i].node.address)<<finger[i].node.port; 
 }
