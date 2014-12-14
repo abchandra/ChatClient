@@ -89,6 +89,17 @@ void ChordNode::handleStabilityTimeout(){
 	}
 	neighborRequestHash.insert(finger[i].start,i);
 	findNeighbors(finger[i].start,(*selfNode));
+	if (KeyLocationHash.isEmpty() || predecessor.key==selfNode->key)
+		return;
+	QMap<quint32,Node>::iterator it = KeyLocationHash.begin();
+	while(it!=KeyLocationHash.end()){
+		if (!isInInterval(it.key(),predecessor.key,selfNode->key,false,false)){
+			//move Keys around
+			neighborRequestHash.insert(it.key(),SENDKEY);
+			findNeighbors(it.key(),(*selfNode));
+		}
+		++it;
+	}
 }
 void ChordNode::handleShareFileButton() {
 	filedialog = new QFileDialog(this);
@@ -323,9 +334,9 @@ void ChordNode::sendNeighborMessage(quint32 key, Node requestNode,bool isGuess){
 	qDebug()<<"sending myself neighbor"<<key<<"for"<<requestNode.key;
 	writeToSocket(message,requestNode.port,requestNode.address);
 }
-void ChordNode::sendKeyMessage(quint32 key, Node dest){
+void ChordNode::sendKeyMessage(quint32 key, Node dest, Node owner){
 	QVariantMap message;
-	QVariant qvNode; qvNode.setValue(*selfNode);
+	QVariant qvNode; qvNode.setValue(owner);
 	message.insert(NEW_UPLOAD_KEY,key);
 	message.insert(REQUEST_SOURCE_KEY,qvNode);
 	writeToSocket(message,dest.port,dest.address);
@@ -456,7 +467,6 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 	Node succ = map.value(SUCCESSOR_KEY).value<Node>();
 	Node n = Node(address,port,key);
 	if (!neighborRequestHash.contains(key)){
-		qDebug()<<"Unexpected Neighbor Reply";
 		return;
 	}
 	qint32 index = neighborRequestHash.value(key);	
@@ -468,7 +478,13 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 		updatePredecessorHash.remove(key);
 	}
 	else if (index==SENDKEY){
-		sendKeyMessage(key,succ);
+		if (KeyLocationHash.contains(key)){
+			sendKeyMessage(key,succ,KeyLocationHash.value(key));
+			KeyLocationHash.remove(key);
+		}
+		else {
+			sendKeyMessage(key,succ,(*selfNode));
+		}
 	}
 	else if(index==DOWNLOAD){
 	qDebug()<<"Sending download request for"<<key<<"to"<<succ.key;

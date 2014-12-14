@@ -32,7 +32,7 @@ A basic Peerster implementation
 #include <QVBoxLayout>
 #include <QListWidget>
 
-#define CHORD_BITS 3
+#define CHORD_BITS 5
 class Node
 {
 public:
@@ -99,7 +99,7 @@ private:
 	QTimer* printTimer;
 	QHash<quint32,qint32> neighborRequestHash;
 	QHash<quint32,quint32> updatePredecessorHash;
-	QHash<quint32,Node>	KeyLocationHash;
+	QMap<quint32,Node>	KeyLocationHash;
 	QHash<quint32,QByteArray> myUploadHash;
 	QMap<QByteArray,quint32> requestedMetaFiles;
 	bool hasjoined;
@@ -122,7 +122,7 @@ private:
 	void initFingerTable(Node,Node);
 	void sendUpdateMessage(Node,Node,quint32);
 	void handleUpdateMessage(QVariantMap);
-	void sendKeyMessage(quint32,Node);
+	void sendKeyMessage(quint32,Node,Node);
 	void handleKeyMessage(QVariantMap);
 	void sendDownloadRequest(quint32,Node,Node);
 	void handleDownloadRequest(QVariantMap);
