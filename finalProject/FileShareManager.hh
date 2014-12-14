@@ -1,3 +1,8 @@
+/* 
+Abhishek Chandra
+Chordster
+15/12/2014
+*/
 #ifndef PEERSTER_FILESHAREMANAGER_HH
 #define PEERSTER_FILESHAREMANAGER_HH
 

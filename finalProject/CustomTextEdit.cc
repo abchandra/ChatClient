@@ -1,3 +1,8 @@
+/* 
+Abhishek Chandra
+Chordster
+15/12/2014
+*/
 #include "CustomTextEdit.hh"
 
 void CustomTextEdit::keyPressEvent(QKeyEvent* e) {

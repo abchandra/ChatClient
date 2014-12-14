@@ -85,7 +85,11 @@ private:
 	QPushButton* downloadfilebutton;//Launch dialog for file download	
 	DownloadFileDialog* sharedialog;
 	QFileDialog* filedialog;
-
+/* 
+Abhishek Chandra
+Chordster
+15/12/2014
+*/
 
 	NetSocket sock;								//Netsocket instance to bind to a port
 	FileShareManager filemanager;

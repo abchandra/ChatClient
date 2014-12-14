@@ -1,3 +1,8 @@
+/* 
+Abhishek Chandra
+Chordster
+15/12/2014
+*/
 #include "ChordNode.hh"
 #include <QDebug>
 #include <QApplication>
@@ -58,12 +63,11 @@ ChordNode::ChordNode(){
 	//Register a callback on NetSocket's readyRead signal to
 	//read pending datagrams.
 	connect(&sock, SIGNAL(readyRead()),this, SLOT(gotNewMessage()));
-	// InitializeIdentifierCircle();
-	qDebug()<<"I'm"<<selfNode->address<<selfNode->port<<selfNode->key;
-	sendJoinRequest(QHostAddress( "128.36.232.41" ),45516);
+	qDebug()<<"Connected:"<<selfNode->address<<selfNode->port<<"Key:"<<selfNode->key;
+	sendJoinRequest(QHostAddress( "128.36.232.25" ),45516);
 	printTimer=new QTimer(this);
 	connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
-	printTimer->start(5000);
+	// printTimer->start(5000);
 
 
 	stabilityTimer=new QTimer(this);
@@ -221,7 +225,7 @@ void ChordNode::gotNewMessage(){
 	//Read Datagram(as a serialized QByteArray) and retrieve sender details
 	QHostAddress sender; quint16 port; 
 	QVariantMap map = readDeserializeDatagram(&sender,&port);
-	qDebug()<<"PING from:"<<sender<<port;
+	// qDebug()<<"PING from:"<<sender<<port;
 
 	if (map.contains(NEIGHBOR_REQUEST_KEY) && map.contains(REQUEST_SOURCE_KEY)){
 		findNeighbors(map.value(NEIGHBOR_REQUEST_KEY).toUInt(),
@@ -283,13 +287,13 @@ bool ChordNode::isInInterval(quint32 key,quint32 nodeKey, quint32 succKey, bool 
 }
 
 void ChordNode::findNeighbors(quint32 key,Node requestnode){
-	qDebug()<<"finding neighbor"<<key<<"for"<<requestnode.address;
+	// qDebug()<<"finding neighbor"<<key<<"for"<<requestnode.address;
 	if (isInInterval(key,selfNode->key,successor.key,false,true))
 		sendNeighborMessage(key,requestnode);
 	else{
 		Node n= closestPrecedingFinger(key);
 		if (n.key!=selfNode->key){
-			qDebug()<<"Asking"<<n.key;
+			// qDebug()<<"Asking"<<n.key;
 			sendNeighborRequest(n,key,requestnode);
 		}
 		else {
@@ -299,7 +303,7 @@ void ChordNode::findNeighbors(quint32 key,Node requestnode){
 			//neighbors correctly. This is very true for the first node
 			//or two to join. Hopefully, we will implement stability to
 			//fix this up anyway.
-			qDebug()<<"Sending self as succ/pred to break tie";
+			// qDebug()<<"Sending self as succ/pred to break tie";
 			sendNeighborMessage(key,requestnode,true);		
 		}
 	}
@@ -310,7 +314,7 @@ Node ChordNode::closestPrecedingFinger(quint32 key){
 		if (isInInterval(finger[i].node.key,selfNode->key,key,false,false))
 			return finger[i].node;
 	}
-	qDebug()<<"Err: Self node is the closest to key";
+	// qDebug()<<"Err: Self node is the closest to key";
 	return (*selfNode);
 }
 
@@ -331,7 +335,7 @@ void ChordNode::sendNeighborMessage(quint32 key, Node requestNode,bool isGuess){
 		qvNode.setValue(successor);
 	message.insert(SUCCESSOR_KEY,qvNode);
 
-	qDebug()<<"sending myself neighbor"<<key<<"for"<<requestNode.key;
+	// qDebug()<<"sending myself neighbor"<<key<<"for"<<requestNode.key;
 	writeToSocket(message,requestNode.port,requestNode.address);
 }
 void ChordNode::sendKeyMessage(quint32 key, Node dest, Node owner){
@@ -361,7 +365,6 @@ void ChordNode::handleDownloadRequest(QVariantMap map){
 	quint32 key= map.value(DOWNLOAD_KEY).toUInt();
 	Node n= map.value(REQUEST_SOURCE_KEY).value<Node>();
 	if(myUploadHash.contains(key)){
-		qDebug()<<"READY FOR THE BLOCKLIST TRANSACTIONS TO BEGIN";
 		QByteArray requestedMetaFile= myUploadHash.value(key);
 		sendDownloadReply(key,requestedMetaFile,(*selfNode),n);		
 		return;
@@ -459,7 +462,7 @@ void ChordNode::handleNotifyMessage(QVariantMap map){
 }
 void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint32 port){
 	if (!map.contains(SUCCESSOR_KEY) || !map.contains(PREDECESSOR_KEY)) {
-		qDebug()<<"malformed Neighbor message";
+		qDebug()<<"malformed Neighbor message ignored";
 		return;
 		}
 	quint32 key = map.value(NEIGHBOR_REPLY_KEY).toUInt();
@@ -473,7 +476,7 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 	if (index==JOIN && key==selfNode->key)
 		join(pred,succ);
 	else if (index==UPDATEPREDECESSOR && updatePredecessorHash.contains(key)){
-		qDebug()<<"Asking"<<pred.key<<"to update at"<<updatePredecessorHash.value(key)<<"if needed";
+		// qDebug()<<"Asking"<<pred.key<<"to update at"<<updatePredecessorHash.value(key)<<"if needed";
 		sendUpdateMessage(pred,(*selfNode),updatePredecessorHash.value(key));
 		updatePredecessorHash.remove(key);
 	}
@@ -498,7 +501,7 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 		sendNotifyMessage(successor);
 	}
 	else if (index>0 && index<(int)idlength && finger[index].start==key){ 
-		qDebug()<<"My finger"<<index<<"is"<<succ.key;
+		// qDebug()<<"My finger"<<index<<"is"<<succ.key;
 		finger[index].node=succ;
 		if (!hasjoined && neighborRequestHash.size()<=1){
 			neighborRequestHash.remove(key);
@@ -515,7 +518,7 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 }
 
 void ChordNode::join(Node pred, Node succ){
-	qDebug()<<"Join called";
+	qDebug()<<"Joining...";
 	initFingerTable(pred,succ);		
 }
 
@@ -553,8 +556,8 @@ void ChordNode::handleUpdateMessage(QVariantMap map){
 			qDebug()<<"Incorrect Predecessor Update Message";
 		return;
 	}
-	qDebug()<<"Update Message Received:"<<"["<<finger[index].start<<","<<finger[index].end<<")	:"<<"current:"<<
-	finger[index].node.key<<"suggested:"<<n.key;
+	// qDebug()<<"Update Message Received:"<<"["<<finger[index].start<<","<<finger[index].end<<")	:"<<"current:"<<
+	// finger[index].node.key<<"suggested:"<<n.key;
 
 	if (index==0 && isInInterval(n.key,selfNode->key,successor.key,true,false)){
 		successor = n; finger[0].node=n;
@@ -563,7 +566,7 @@ void ChordNode::handleUpdateMessage(QVariantMap map){
 		
 		if (n.key==selfNode->key) //Message updates gone full cycle
 			return;
-		qDebug()<<"Accepted.";
+		// qDebug()<<"Accepted.";
 		finger[index].node=n;
 		sendUpdateMessage(predecessor,n,index);
 	}

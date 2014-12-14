@@ -1,11 +1,10 @@
-/***********************************
+/* 
 Abhishek Chandra
-CPSC 426 lab1 
-09/12/2014
-
-A basic Peerster implementation
-************************************/
+Chordster
+15/12/2014
+*/
 #include <QApplication>
+
 #include "ChordNode.hh"
 
 

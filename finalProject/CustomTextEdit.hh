@@ -1,3 +1,8 @@
+/* 
+Abhishek Chandra
+Chordster
+15/12/2014
+*/
 #include <QTextEdit>
 #include <QKeyEvent>
 class CustomTextEdit : public QTextEdit

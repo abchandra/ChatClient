@@ -1,4 +1,8 @@
-
+/* 
+Abhishek Chandra
+Chordster
+15/12/2014
+*/
 #include "CustomTextEdit.hh"
 
 #include <QDialog>
