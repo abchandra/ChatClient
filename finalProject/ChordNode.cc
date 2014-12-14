@@ -13,6 +13,10 @@
 #define FINGER_INDEX_KEY "Finger_Index"
 #define NEW_UPLOAD_KEY "New_Upload"
 #define DOWNLOAD_KEY "Download_Request"
+#define DOWNLOAD_REPLY_KEY "Download_Reply"
+#define BLOCK_REQUEST_KEY "BlockRequest"
+#define BLOCK_REPLY_KEY "BlockReply"
+#define DATA_KEY "Data"
 
 #define JOIN -1
 #define UPDATEPREDECESSOR -2
@@ -101,6 +105,9 @@ void ChordNode::handleDownloadFile(quint32 key) {
 	//Close the dialog and free it
 	sharedialog->close();
 	delete sharedialog;
+	qDebug()<<"Making request for"<<key;
+	neighborRequestHash.insert(key,DOWNLOAD);
+	findNeighbors(key,(*selfNode));
 	// //update requested metafiles
 	// requestedmetafiles.insert(QByteArray::fromHex(fileid),qMakePair(destination,QString("")));
 	// sendBlockRequestMessage(destination,QByteArray::fromHex(fileid));
@@ -209,7 +216,18 @@ void ChordNode::gotNewMessage(){
 	else if (map.contains(NEW_UPLOAD_KEY) && map.contains(REQUEST_SOURCE_KEY)){
 		handleKeyMessage(map);
 	}
-
+	else if (map.contains(DOWNLOAD_KEY) && map.contains(REQUEST_SOURCE_KEY)){
+		handleDownloadRequest(map);
+	}
+	else if (map.contains(DOWNLOAD_REPLY_KEY) && map.contains(REQUEST_SOURCE_KEY)){
+		handleDownloadReply(map);
+	}
+	else if(map.contains(BLOCK_REQUEST_KEY)){
+		handleBlockRequestMessage(map);
+	}
+	else if(map.contains(BLOCK_REPLY_KEY) && map.contains(DATA_KEY)){
+		handleBlockReplyMessage(map);
+	}
 }
 
 void ChordNode::SetFingerTableIntervals(){
@@ -317,20 +335,93 @@ void ChordNode::sendDownloadRequest(quint32 key, Node dest, Node requestNode){
 }
 
 void ChordNode::handleDownloadRequest(QVariantMap map){
-	quint32 key= map.value(NEW_UPLOAD_KEY).toUInt();
+	quint32 key= map.value(DOWNLOAD_KEY).toUInt();
+	Node n= map.value(REQUEST_SOURCE_KEY).value<Node>();
 	if(myUploadHash.contains(key)){
-		//TODO:
 		qDebug()<<"READY FOR THE BLOCKLIST TRANSACTIONS TO BEGIN";
+		QByteArray requestedMetaFile= myUploadHash.value(key);
+		sendDownloadReply(key,requestedMetaFile,(*selfNode),n);		
 		return;
 	}
 	if (!KeyLocationHash.contains(key))
 		return;
 	Node uploaderNode = KeyLocationHash.value(key);
-	Node n= map.value(REQUEST_SOURCE_KEY).value<Node>();
 	qDebug()<<"Got a download request for"<<key<<"by node at"<<n.key;
 	sendDownloadRequest(key,uploaderNode,n);
 }
 
+void ChordNode::sendDownloadReply(quint32 key,QByteArray filehash,Node from, Node dest){
+	QVariantMap message;
+	QVariant qvNode; qvNode.setValue(from);
+	message.insert(DOWNLOAD_REPLY_KEY,key);
+	message.insert(REQUEST_SOURCE_KEY,qvNode);
+	message.insert(DATA_KEY,filehash);
+	writeToSocket(message,dest.port,dest.address);
+}
+
+void ChordNode::handleDownloadReply(QVariantMap map){
+	if(!map.contains(DATA_KEY))
+		return;
+	quint32 key= map.value(DOWNLOAD_REPLY_KEY).toUInt();
+	Node source= map.value(REQUEST_SOURCE_KEY).value<Node>();
+	QByteArray metafilehash=map.value(DATA_KEY).toByteArray();
+	//sanity check
+	if (key!=getKeyFromByteArray(metafilehash))
+		return;
+	//Now we can add this hash to our requested metafiles
+	requestedMetaFiles.insert(metafilehash,key);
+	sendBlockRequestMessage(source,metafilehash);
+}
+
+void ChordNode::sendBlockRequestMessage(Node dest, QByteArray hashval){
+	QVariantMap map;
+	QVariant qvNode; qvNode.setValue(*selfNode);
+	map.insert(BLOCK_REQUEST_KEY,hashval);
+	map.insert(REQUEST_SOURCE_KEY,qvNode);
+	writeToSocket(map,dest.port,dest.address);
+
+}
+
+void ChordNode::handleBlockRequestMessage(QVariantMap map){
+	QByteArray hashval = map.value(BLOCK_REQUEST_KEY).toByteArray();
+	Node source= map.value(REQUEST_SOURCE_KEY).value<Node>();
+
+	QByteArray* result = filemanager.findBlockFromHash(hashval);
+	if (result==NULL)
+		qDebug()<<"Err: block not found";
+	if(result!=NULL && filemanager.sanityCheck(hashval,(*result))){
+		sendBlockReplyMessage(*result,hashval,source);
+	}
+}
+
+void ChordNode::sendBlockReplyMessage(QByteArray block,QByteArray hashval, Node dest){
+	QVariantMap map;
+	QVariant qvNode; qvNode.setValue(*selfNode);
+	map.insert(DATA_KEY,block);
+	map.insert(BLOCK_REPLY_KEY,hashval);
+	map.insert(REQUEST_SOURCE_KEY,qvNode);
+	writeToSocket(map,dest.port,dest.address);
+}
+
+void ChordNode::handleBlockReplyMessage(QVariantMap map){
+	QByteArray data = map.value(DATA_KEY).toByteArray();
+	QByteArray hashval = map.value(BLOCK_REPLY_KEY).toByteArray();
+	Node source= map.value(REQUEST_SOURCE_KEY).value<Node>();
+	if (filemanager.sanityCheck(hashval,data)){
+	QByteArray nexthash="";
+	if (requestedMetaFiles.contains(hashval)) {
+		QString filename = QString::number(requestedMetaFiles.value(hashval));
+		requestedMetaFiles.remove(hashval);
+	  nexthash = filemanager.addDownload(hashval,data,source.key,filename);
+	}
+	else{
+		nexthash = filemanager.addBlock(hashval,data,source.key);
+	}
+	if (!nexthash.isEmpty()){
+		sendBlockRequestMessage(source,nexthash);
+	}
+}
+}
 void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint32 port){
 	if (!map.contains(SUCCESSOR_KEY) || !map.contains(PREDECESSOR_KEY)) {
 		qDebug()<<"malformed Neighbor message";
@@ -356,6 +447,7 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 		sendKeyMessage(key,succ);
 	}
 	else if(index==DOWNLOAD){
+	qDebug()<<"Sending download request for"<<key<<"to"<<succ.key;
 		sendDownloadRequest(key,succ,(*selfNode));
 	}
 	else if (index>0 && index<(int)idlength && finger[index].start==key){ 

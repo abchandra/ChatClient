@@ -9,7 +9,7 @@
 class FileData {
 public:
 	QString filename;
-	QString hostorigin;
+	quint32 hostKey;
 	quint32 filesize;
 	QHash<QByteArray,QByteArray> blocklookuptable;
 	QByteArray blocks;
@@ -27,8 +27,8 @@ public:
 	QList<QByteArray> addFiles(QStringList);
 	QByteArray* findBlockFromHash(QByteArray);
 	bool sanityCheck(QByteArray,QByteArray);
-	QByteArray addDownload(QByteArray,QByteArray,QString,QString);
-	QByteArray addBlock(QByteArray,QByteArray,QString);
+	QByteArray addDownload(QByteArray,QByteArray,quint32,QString);
+	QByteArray addBlock(QByteArray,QByteArray,quint32);
 	QByteArray nexthashval(QByteArray);
 	void writeToFile(FileData);
 	void keywordSearch(QString,QVariantList&,QVariantList&);

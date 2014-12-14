@@ -70,13 +70,13 @@ bool FileShareManager::sanityCheck(QByteArray hashval, QByteArray block){
 }
 
 QByteArray FileShareManager::addDownload(QByteArray blocklisthash,QByteArray blocklistfile, 
-	QString host,QString filename) {
+	quint32 hostKey,QString filename) {
 	FileData filedata;
 	filedata.filename=filename;
 	filedata.blocklisthash = blocklisthash;
 	filedata.blocklistfile = blocklistfile;
 	filedata.nextdownloadblock=blocklistfile;
-	filedata.hostorigin = host;
+	filedata.hostKey = hostKey;
 	if (blocklistfile.isEmpty()) {
 		writeToFile(filedata);
 		return "";
@@ -85,10 +85,10 @@ QByteArray FileShareManager::addDownload(QByteArray blocklisthash,QByteArray blo
 	return nexthashval(filedata.nextdownloadblock);
 
 }
-QByteArray FileShareManager::addBlock(QByteArray hashval, QByteArray block, QString source) {
+QByteArray FileShareManager::addBlock(QByteArray hashval, QByteArray block, quint32 sourceKey) {
 		QList<FileData>::iterator i;
 	for (i=inprogressdownloads.begin(); i!= inprogressdownloads.end();++i){
-		if (i->nextdownloadblock.left(const_hashsize)==hashval && source==i->hostorigin){
+		if (i->nextdownloadblock.left(const_hashsize)==hashval && sourceKey==i->hostKey){
 			i->blocks.append(block);
 			i->blocklookuptable.insert(hashval,block);
 			if (i->nextdownloadblock.size() <=const_hashsize){
