@@ -11,11 +11,8 @@ class NetSocket : public QUdpSocket
 		NetSocket();
 		bool bind();																//bind to default port
 		bool LookupOwnIP();
-
+		void delay(quint16 secs);
 	public slots:
 		void lookedUp(QHostInfo);			//Handles completed DNS lookups
-
-	private:
-		void delay();
 
 };

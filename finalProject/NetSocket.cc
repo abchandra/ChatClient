@@ -2,9 +2,9 @@
 #include <unistd.h>
 #include <QTime>
 #include <QCoreApplication>
-void NetSocket::delay()
+void NetSocket::delay(quint16 secs)
 {
-    QTime dieTime= QTime::currentTime().addSecs(2);
+    QTime dieTime= QTime::currentTime().addSecs(secs);
     while( QTime::currentTime() < dieTime )
     	QCoreApplication::processEvents(QEventLoop::AllEvents, 100);    
 }
@@ -43,7 +43,7 @@ bool NetSocket::LookupOwnIP(){
 
 	QHostInfo::lookupHost(QHostInfo::localHostName(),this,SLOT(lookedUp(QHostInfo)));
 	if (hostInfo==NULL)
-		delay();
+		delay(2);
 	if (!hostInfo || hostInfo->error() != QHostInfo::NoError) {
     qDebug() << "Lookup failed:" << hostInfo->errorString();
     return false;

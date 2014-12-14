@@ -67,10 +67,11 @@ public:
 
 public slots:
 	void gotNewMessage();					//Handles readyRead() for incoming datagrams
-	
+	void printStatus();
 private:
 	static const quint32 idlength = CHORD_BITS;
 	static const quint32 idSpaceSize = 1<<idlength;
+	static const quint32 predecessorIndex = idlength+1;
 	
 
 	QVBoxLayout *layout1;					//Layout of GUI
@@ -84,9 +85,9 @@ private:
 	FingerTableEntry* finger;
 	Node predecessor;
 	Node successor;
-	
-	enum Mode{PRED, SUCC, JOIN};
-	QHash<quint32,Mode> neighborRequestHash;
+	QTimer* printTimer;
+	QHash<quint32,qint32> neighborRequestHash;
+	QHash<quint32,quint32> updatePredecessorHash;
 	void InitializeIdentifierCircle();//Init a new id circle
 	quint32 getKeyFromName(QString);	//Create chord key from given QString		
 	void setCreateSelfNode();			//Create and store the chord key for node
@@ -95,15 +96,17 @@ private:
 	QByteArray serializeToByteArray(QVariantMap);	//Serialze QVMap to QByteArray
 	QVariantMap readDeserializeDatagram(QHostAddress*, quint16*);
 	void SetFingerTableIntervals();
-	void findSuccessor(quint32, Node, Mode m=SUCC);
 	void findNeighbors(quint32, Node);
 	Node closestPrecedingFinger(quint32);
 	void sendNeighborRequest(Node,quint32,Node);
 	void sendNeighborMessage(quint32,Node);
-	void handleFoundNeighbor(QVariantMap);
+	void handleFoundNeighbor(QVariantMap,QHostAddress,quint32);
 	bool isInInterval(quint32,quint32,quint32,bool,bool);
 	void join(Node,Node);
 	void initFingerTable(Node,Node);
+	void sendUpdateMessage(Node,Node,quint32);
+	void handleUpdateMessage(QVariantMap);
+	void updateOthers();
 };
 
 #endif // CHORDSTER_MAIN_HH
