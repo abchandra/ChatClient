@@ -17,16 +17,18 @@
 #define BLOCK_REQUEST_KEY "BlockRequest"
 #define BLOCK_REPLY_KEY "BlockReply"
 #define DATA_KEY "Data"
+#define STABILITY_KEY "Stability"
 
 #define JOIN -1
 #define UPDATEPREDECESSOR -2
 #define SENDKEY -3
 #define DOWNLOAD -4
+#define STABILITY -5
 ChordNode::ChordNode(){
 	qRegisterMetaType<Node>();
 	qRegisterMetaTypeStreamOperators<Node>();
 	setWindowTitle("Chordster");
-
+	hasjoined = false;
 	sharefilebutton = new QPushButton("Share file...",this);
 	downloadfilebutton = new QPushButton("Download file...",this);
 
@@ -59,18 +61,14 @@ ChordNode::ChordNode(){
 	// InitializeIdentifierCircle();
 	qDebug()<<"I'm"<<selfNode->address<<selfNode->port<<selfNode->key;
 	sendJoinRequest(QHostAddress( "128.36.232.41" ),45516);
-	// printTimer=new QTimer(this);
-	// connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
-	// printTimer->start(5000);
-	//Dialog to connect to a chord node
+	printTimer=new QTimer(this);
+	connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
+	printTimer->start(5000);
 
-	//Here we need preserve join conditions from 4.4
-	//For now:
-	//	locate succ and pred of succ
-	//	add self to between
-	//	switch keys around
-	//	Will need a stabilization state
-	//	
+
+	stabilityTimer=new QTimer(this);
+	connect(stabilityTimer,SIGNAL(timeout()),this,SLOT(handleStabilityTimeout()));
+	stabilityTimer->start(10000);
 }
 QDataStream& operator<<(QDataStream &out, const Node &n){
 	out<<n.key<<n.address<<n.port;
@@ -81,6 +79,17 @@ QDataStream& operator>>(QDataStream &in, Node &n){
 	return in;
 }
 
+void ChordNode::handleStabilityTimeout(){
+	neighborRequestHash.insert(successor.key,STABILITY);
+	findNeighbors(successor.key,(*selfNode));
+	int i=0;
+	while(!i){
+		qsrand(qrand());
+		i = qrand()%idlength;
+	}
+	neighborRequestHash.insert(finger[i].start,i);
+	findNeighbors(finger[i].start,(*selfNode));
+}
 void ChordNode::handleShareFileButton() {
 	filedialog = new QFileDialog(this);
 	filedialog->setFileMode(QFileDialog::ExistingFiles);
@@ -227,6 +236,9 @@ void ChordNode::gotNewMessage(){
 	}
 	else if(map.contains(BLOCK_REPLY_KEY) && map.contains(DATA_KEY)){
 		handleBlockReplyMessage(map);
+	}
+	else if(map.contains(STABILITY_KEY)){
+		handleNotifyMessage(map);
 	}
 }
 
@@ -408,19 +420,31 @@ void ChordNode::handleBlockReplyMessage(QVariantMap map){
 	QByteArray hashval = map.value(BLOCK_REPLY_KEY).toByteArray();
 	Node source= map.value(REQUEST_SOURCE_KEY).value<Node>();
 	if (filemanager.sanityCheck(hashval,data)){
-	QByteArray nexthash="";
-	if (requestedMetaFiles.contains(hashval)) {
-		QString filename = QString::number(requestedMetaFiles.value(hashval));
-		requestedMetaFiles.remove(hashval);
-	  nexthash = filemanager.addDownload(hashval,data,source.key,filename);
-	}
-	else{
-		nexthash = filemanager.addBlock(hashval,data,source.key);
-	}
-	if (!nexthash.isEmpty()){
-		sendBlockRequestMessage(source,nexthash);
+		QByteArray nexthash="";
+		if (requestedMetaFiles.contains(hashval)) {
+			QString filename = QString::number(requestedMetaFiles.value(hashval));
+			requestedMetaFiles.remove(hashval);
+		  nexthash = filemanager.addDownload(hashval,data,source.key,filename);
+		}
+		else{
+			nexthash = filemanager.addBlock(hashval,data,source.key);
+		}
+		if (!nexthash.isEmpty()){
+			sendBlockRequestMessage(source,nexthash);
+		}
 	}
 }
+void ChordNode::sendNotifyMessage(Node dest){
+	QVariantMap message; 
+	QVariant qvNode; qvNode.setValue(*selfNode);
+	message.insert(STABILITY_KEY,qvNode);
+	writeToSocket(message,dest.port,dest.address);
+}
+
+void ChordNode::handleNotifyMessage(QVariantMap map){
+	Node x = map.value(STABILITY_KEY).value<Node>();
+	if(predecessor.key!=x.key && isInInterval(x.key,predecessor.key,selfNode->key,false,false))
+		predecessor=x;
 }
 void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint32 port){
 	if (!map.contains(SUCCESSOR_KEY) || !map.contains(PREDECESSOR_KEY)) {
@@ -450,11 +474,19 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 	qDebug()<<"Sending download request for"<<key<<"to"<<succ.key;
 		sendDownloadRequest(key,succ,(*selfNode));
 	}
+	else if (index==STABILITY){
+		Node x = pred; 
+		if (x.key != selfNode->key && isInInterval(x.key,selfNode->key,key,false,false)){
+			successor = x; finger[0].node=x;
+		}
+		sendNotifyMessage(successor);
+	}
 	else if (index>0 && index<(int)idlength && finger[index].start==key){ 
 		qDebug()<<"My finger"<<index<<"is"<<succ.key;
 		finger[index].node=succ;
-		if (neighborRequestHash.size()<=1){
+		if (!hasjoined && neighborRequestHash.size()<=1){
 			neighborRequestHash.remove(key);
+			hasjoined=true;
 			updateOthers(); 
 			return;
 		}

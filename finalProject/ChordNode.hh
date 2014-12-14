@@ -32,7 +32,7 @@ A basic Peerster implementation
 #include <QVBoxLayout>
 #include <QListWidget>
 
-#define CHORD_BITS 5
+#define CHORD_BITS 3
 class Node
 {
 public:
@@ -72,7 +72,7 @@ public slots:
 	void handleShareFileButton();	//Handles released() for file sharing button
 	void handleDownloadFile(quint32 key);
 	void handleDownloadButton();	//Generate dialog for requesting a download
-
+	void handleStabilityTimeout();
 	void printStatus();
 private:
 	static const quint32 idlength = CHORD_BITS;
@@ -95,12 +95,14 @@ private:
 	FingerTableEntry* finger;
 	Node predecessor;
 	Node successor;
+	QTimer* stabilityTimer;
 	QTimer* printTimer;
 	QHash<quint32,qint32> neighborRequestHash;
 	QHash<quint32,quint32> updatePredecessorHash;
 	QHash<quint32,Node>	KeyLocationHash;
 	QHash<quint32,QByteArray> myUploadHash;
 	QMap<QByteArray,quint32> requestedMetaFiles;
+	bool hasjoined;
 	void InitializeIdentifierCircle();//Init a new id circle
 	quint32 getKeyFromName(QString);	//Create chord key from given QString		
 	quint32 getKeyFromByteArray(QByteArray);
@@ -130,6 +132,8 @@ private:
 	void handleBlockRequestMessage(QVariantMap);
 	void sendBlockReplyMessage(QByteArray,QByteArray,Node);
 	void handleBlockReplyMessage(QVariantMap);
+	void sendNotifyMessage(Node);
+	void handleNotifyMessage(QVariantMap);
 	void updateOthers();
 	void addFilesToChord(QList<QByteArray>);
 };
