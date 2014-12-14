@@ -10,5 +10,5 @@ QT += network
 CONFIG+= crypto
 
 # Input
-HEADERS += ChordNode.hh NetSocket.hh
-SOURCES += main.cc ChordNode.cc NetSocket.cc
+HEADERS += ChordNode.hh NetSocket.hh FileShareManager.hh CustomTextEdit.hh DownloadFileDialog.hh
+SOURCES += main.cc ChordNode.cc NetSocket.cc FileShareManager.cc CustomTextEdit.cc DownloadFileDialog.cc

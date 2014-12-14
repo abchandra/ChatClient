@@ -9,6 +9,8 @@ A basic Peerster implementation
 #ifndef CHORDSTER_MAIN_HH
 #define CHORDSTER_MAIN_HH
 #include "NetSocket.hh"
+#include "FileShareManager.hh"
+#include "DownloadFileDialog.hh"
 #include <QComboBox>
 #include <QtCrypto>
 #include <QDataStream>
@@ -30,7 +32,7 @@ A basic Peerster implementation
 #include <QVBoxLayout>
 #include <QListWidget>
 
-#define CHORD_BITS 10
+#define CHORD_BITS 3
 class Node
 {
 public:
@@ -67,6 +69,10 @@ public:
 
 public slots:
 	void gotNewMessage();					//Handles readyRead() for incoming datagrams
+	void handleShareFileButton();	//Handles released() for file sharing button
+	void handleDownloadFile(quint32 key);
+	void handleDownloadButton();	//Generate dialog for requesting a download
+
 	void printStatus();
 private:
 	static const quint32 idlength = CHORD_BITS;
@@ -77,9 +83,13 @@ private:
 	QVBoxLayout *layout1;					//Layout of GUI
 	QPushButton* sharefilebutton;	//Button to launch dialog for file sharing
 	QPushButton* downloadfilebutton;//Launch dialog for file download	
+	DownloadFileDialog* sharedialog;
+	QFileDialog* filedialog;
 
 
 	NetSocket sock;								//Netsocket instance to bind to a port
+	FileShareManager filemanager;
+	
 	Node* selfNode;
 	Node joinNode;
 	FingerTableEntry* finger;
@@ -88,8 +98,11 @@ private:
 	QTimer* printTimer;
 	QHash<quint32,qint32> neighborRequestHash;
 	QHash<quint32,quint32> updatePredecessorHash;
+	QHash<quint32,Node>	KeyLocationHash;
+	QHash<quint32,QByteArray> myUploadHash;
 	void InitializeIdentifierCircle();//Init a new id circle
 	quint32 getKeyFromName(QString);	//Create chord key from given QString		
+	quint32 getKeyFromByteArray(QByteArray);
 	void setCreateSelfNode();			//Create and store the chord key for node
 	void sendJoinRequest(QHostAddress, quint16); // Send request to join chord
 	void writeToSocket(QVariantMap, quint16,QHostAddress);//Calls writeDatagram
@@ -106,7 +119,12 @@ private:
 	void initFingerTable(Node,Node);
 	void sendUpdateMessage(Node,Node,quint32);
 	void handleUpdateMessage(QVariantMap);
+	void sendKeyMessage(quint32,Node);
+	void handleKeyMessage(QVariantMap);
+	void sendDownloadRequest(quint32,Node,Node);
+	void handleDownloadRequest(QVariantMap);
 	void updateOthers();
+	void addFilesToChord(QList<QByteArray>);
 };
 
 #endif // CHORDSTER_MAIN_HH

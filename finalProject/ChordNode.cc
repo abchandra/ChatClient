@@ -11,8 +11,13 @@
 #define REQUEST_SOURCE_KEY "Source"
 #define	UPDATE_REQUEST_KEY "Update"
 #define FINGER_INDEX_KEY "Finger_Index"
+#define NEW_UPLOAD_KEY "New_Upload"
+#define DOWNLOAD_KEY "Download_Request"
+
 #define JOIN -1
 #define UPDATEPREDECESSOR -2
+#define SENDKEY -3
+#define DOWNLOAD -4
 ChordNode::ChordNode(){
 	qRegisterMetaType<Node>();
 	qRegisterMetaTypeStreamOperators<Node>();
@@ -25,6 +30,10 @@ ChordNode::ChordNode(){
 	sharefilebutton->setAutoDefault(false);
 	downloadfilebutton->setAutoDefault(false);
 
+	//Register callback on file share button to open file sharing dialog
+	connect(sharefilebutton,SIGNAL(released()),this,SLOT(handleShareFileButton()));
+	//Register callback on download file button to open file sharing dialog
+	connect(downloadfilebutton,SIGNAL(released()),this,SLOT(handleDownloadButton()));
 	layout1 = new QVBoxLayout();
 	layout1->addWidget(downloadfilebutton);
 	layout1->addWidget(sharefilebutton);
@@ -45,10 +54,10 @@ ChordNode::ChordNode(){
 	connect(&sock, SIGNAL(readyRead()),this, SLOT(gotNewMessage()));
 	// InitializeIdentifierCircle();
 	qDebug()<<"I'm"<<selfNode->address<<selfNode->port<<selfNode->key;
-	sendJoinRequest(QHostAddress( "128.36.232.20" ),45516);
-	printTimer=new QTimer(this);
-	connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
-	printTimer->start(5000);
+	sendJoinRequest(QHostAddress( "128.36.232.41" ),45516);
+	// printTimer=new QTimer(this);
+	// connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
+	// printTimer->start(5000);
 	//Dialog to connect to a chord node
 
 	//Here we need preserve join conditions from 4.4
@@ -68,6 +77,46 @@ QDataStream& operator>>(QDataStream &in, Node &n){
 	return in;
 }
 
+void ChordNode::handleShareFileButton() {
+	filedialog = new QFileDialog(this);
+	filedialog->setFileMode(QFileDialog::ExistingFiles);
+	QStringList filenames;
+	if (filedialog->exec())
+	  filenames = filedialog->selectedFiles();
+	//Call FileShareManager instance to handle files
+	addFilesToChord(filemanager.addFiles(filenames));
+	delete filedialog;
+	qDebug()<<filenames;
+
+}
+
+void ChordNode::handleDownloadButton() {
+	sharedialog = new DownloadFileDialog();
+	connect(sharedialog,SIGNAL(downloadfile(quint32)),this,
+		SLOT(handleDownloadFile(quint32)));
+	sharedialog->show();
+}
+
+void ChordNode::handleDownloadFile(quint32 key) {
+	//Close the dialog and free it
+	sharedialog->close();
+	delete sharedialog;
+	// //update requested metafiles
+	// requestedmetafiles.insert(QByteArray::fromHex(fileid),qMakePair(destination,QString("")));
+	// sendBlockRequestMessage(destination,QByteArray::fromHex(fileid));
+}
+
+void ChordNode::addFilesToChord(QList<QByteArray> addedFilesHashList){
+	QList<QByteArray>::iterator i;
+	for(i=addedFilesHashList.begin();i!=addedFilesHashList.end();++i){
+		quint32 key = getKeyFromByteArray(*i);
+		//store in upload hash
+		myUploadHash.insert(key,(*i));
+		//send to successor of key
+		neighborRequestHash.insert(key,SENDKEY);
+		findNeighbors(key,(*selfNode));
+	}
+}
 
 void ChordNode::setCreateSelfNode(){
  	if (!sock.hostInfo)
@@ -85,7 +134,10 @@ quint32 ChordNode::getKeyFromName(QString name){
 	QByteArray byteArray; 
 	byteArray.append(name);
   QByteArray bytes = QCA::Hash("sha1").hash(byteArray).toByteArray();
-	// Create a bit array of the appropriate size
+  return getKeyFromByteArray(bytes);
+}
+quint32 ChordNode::getKeyFromByteArray(QByteArray bytes){
+		// Create a bit array of the appropriate size
 	QBitArray bits(bytes.count()*8);
 	// Convert from QByteArray to QBitArray
 	for(int i=0; i<bytes.count(); ++i) {
@@ -153,6 +205,9 @@ void ChordNode::gotNewMessage(){
 	}
 	else if (map.contains(UPDATE_REQUEST_KEY)){
 		handleUpdateMessage(map);
+	}
+	else if (map.contains(NEW_UPLOAD_KEY) && map.contains(REQUEST_SOURCE_KEY)){
+		handleKeyMessage(map);
 	}
 
 }
@@ -238,6 +293,43 @@ void ChordNode::sendNeighborMessage(quint32 key, Node requestNode,bool isGuess){
 	qDebug()<<"sending myself neighbor"<<key<<"for"<<requestNode.key;
 	writeToSocket(message,requestNode.port,requestNode.address);
 }
+void ChordNode::sendKeyMessage(quint32 key, Node dest){
+	QVariantMap message;
+	QVariant qvNode; qvNode.setValue(*selfNode);
+	message.insert(NEW_UPLOAD_KEY,key);
+	message.insert(REQUEST_SOURCE_KEY,qvNode);
+	writeToSocket(message,dest.port,dest.address);
+}
+
+void ChordNode::handleKeyMessage(QVariantMap map){
+	quint32 key= map.value(NEW_UPLOAD_KEY).toUInt();
+	Node n= map.value(REQUEST_SOURCE_KEY).value<Node>();
+	qDebug()<<"Got new upload at"<<key<<"by node at"<<n.key;
+	KeyLocationHash.insert(key,n);
+}
+
+void ChordNode::sendDownloadRequest(quint32 key, Node dest, Node requestNode){
+	QVariantMap message;
+	QVariant qvNode; qvNode.setValue(requestNode);
+	message.insert(DOWNLOAD_KEY,key);
+	message.insert(REQUEST_SOURCE_KEY,qvNode);
+	writeToSocket(message,dest.port,dest.address);
+}
+
+void ChordNode::handleDownloadRequest(QVariantMap map){
+	quint32 key= map.value(NEW_UPLOAD_KEY).toUInt();
+	if(myUploadHash.contains(key)){
+		//TODO:
+		qDebug()<<"READY FOR THE BLOCKLIST TRANSACTIONS TO BEGIN";
+		return;
+	}
+	if (!KeyLocationHash.contains(key))
+		return;
+	Node uploaderNode = KeyLocationHash.value(key);
+	Node n= map.value(REQUEST_SOURCE_KEY).value<Node>();
+	qDebug()<<"Got a download request for"<<key<<"by node at"<<n.key;
+	sendDownloadRequest(key,uploaderNode,n);
+}
 
 void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint32 port){
 	if (!map.contains(SUCCESSOR_KEY) || !map.contains(PREDECESSOR_KEY)) {
@@ -259,6 +351,12 @@ void ChordNode::handleFoundNeighbor(QVariantMap map, QHostAddress address, quint
 		qDebug()<<"Asking"<<pred.key<<"to update at"<<updatePredecessorHash.value(key)<<"if needed";
 		sendUpdateMessage(pred,(*selfNode),updatePredecessorHash.value(key));
 		updatePredecessorHash.remove(key);
+	}
+	else if (index==SENDKEY){
+		sendKeyMessage(key,succ);
+	}
+	else if(index==DOWNLOAD){
+		sendDownloadRequest(key,succ,(*selfNode));
 	}
 	else if (index>0 && index<(int)idlength && finger[index].start==key){ 
 		qDebug()<<"My finger"<<index<<"is"<<succ.key;
