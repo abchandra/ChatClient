@@ -1,0 +1,165 @@
+Abhishek Chandra
+README for Chordster
+Final Project, CPSC 426
+December 15, 2014
+
+
+Chordster is an implementation of the chord protocol (Stoica et al[1]) using the
+Qt framework. The implementation allows for uploading of files to keys and 
+fast lookup/download of these files using the circular key space.
+
+Overarching functionality:
+Nodes communicate over UDP using packets with predefined keys discussed below.
+
+For a new node to connect to the chord network, it needs the ip and port of
+one node already on the network.
+
+Joins take place using the algorithm described in Figures 4 and 6 of the paper.
+In particular, all successor and predecessor searches take place using neighbor
+Request keys and reply keys. The request node maintains a hash of its neighbor
+requests(neighbourRequestHash) and why it made those requests (using 5 predefined
+keys), and calls handlers as required.
+
+There is a stability timer that times out every 10 seconds, to notify successors,
+fix random fingers and transfer random keys if needed, based on figure 7 of the
+paper.
+
+Finally, files are downloaded using the same style as lab 3.
+
+
+HOW TO USE:
+
+Launch chordster:
+
+Run "./chordster". 
+This will cause a dialog to pop up prompting you for an ip:port to connect to.
+running "./chordster x.x.x.x:port" will use the command line ip:port, and not 
+prompt you through the gui.
+
+Entering no ip:port will prompt the chordster instance to start a NEW ring with
+itself as the first node. 
+
+Share Files:
+Select one or more files to upload to the chord network
+
+Download File:
+Enter a key to download from. The downloaded file will be downloaded with the key
+as its name.
+
+See Finger Table:
+See the current successor, predecessor and finger keys.
+
+WHAT TO TOUCH:
+line32 of chordnode.hh specifies m, the number of bits in the key, and thus
+the size of the chord network. Note that a very small network may have collisions
+leading to problematic behavior.
+
+For testing purposes/seeing chord in action: 
+lines 81-83 will cause the finger table to be shown in qdebug every 1 second,
+allowing one to see how stabilization works as nodes join.
+
+
+Implementation Details:
+
+Node Keys: 
+sha1 hash of hostname:port modulo ring size.
+
+How file uploading works:
+
+A file uploaded by node n gets a key k generated based on the sha1 hash of its 
+block list meta file (mod ring size).The file stays with node n. However, n 
+sends a message to successor(k) telling them that key k has an upload. The
+successor(k) maintains a map of keys its responsible for, and when node n' 
+requests key k, it directs node n to send the block list meta file hash to n.
+
+From that point, n and n' exchange blocks using BLOCK_REPLY_KEY and 
+BLOCK_REQUEST_KEY as per lab3.
+
+
+How to conceivably build a chord implementation compatible with mine:
+
+1. Instead of origin strings, we pass around the custom type Node as defined
+	in chordnode.hh.
+
+2. Messages use the following keys:
+
+#define NEIGHBOR_REQUEST_KEY "Neighbor_Request"
+#define NEIGHBOR_REPLY_KEY "Neighbor_Reply"
+#define PREDECESSOR_KEY "Predecessor" 
+#define SUCCESSOR_KEY "Successor"
+#define REQUEST_SOURCE_KEY "Source"
+#define	UPDATE_REQUEST_KEY "Update"
+#define FINGER_INDEX_KEY "Finger_Index"
+#define NEW_UPLOAD_KEY "New_Upload"
+#define DOWNLOAD_KEY "Download_Request"
+#define DOWNLOAD_REPLY_KEY "Download_Reply"
+#define BLOCK_REQUEST_KEY "BlockRequest"
+#define BLOCK_REPLY_KEY "BlockReply"
+#define DATA_KEY "Data"
+#define STABILITY_KEY "Stability"
+
+
+Note: all messages are QVariantMaps.
+
+A neighbor request message has NEIGHBOR_REQUEST_KEY (key whose neighbors we 
+want) and REQUEST_SOURCE_KEY (Node who is making the request).
+
+A neighbor reply message has NEIGHBOR_REPLY_KEY(key whose neighbors are being
+sent), a PREDECESSOR_KEY and a SUCCESSOR_KEY (the neigbor Nodes).
+
+A download request has the DOWNLOAD_KEY and the REQUEST_SOURCE_KEY,
+whereas the download reply has DOWNLOAD_REPLY_KEY and the DATA_KEY (containing
+the block list meta file for the key requested)
+
+Block reply/requests work as before,except now we don't need hop limits and
+we always know where to send these requests thanks to DOWNLOAD_KEY/
+DOWNLOAD_REPLY_KEY communications
+
+When a new upload is made at k, succ(k) should be sent an upload message with
+NEW_UPLOAD_KEY and REQUEST_SOURCE_KEY so that they can add this to their hash.
+
+
+STABILITY_KEY,UPDATE_REQUEST_KEY,FINGER_INDEX_KEY are involved in stability
+checks  and updating finger tables : These are required for speed, not for
+the ring to survive as such.
+
+
+Note: The chord layer does not handle node failures, as implementing just this
+part took well over two labs worth of hours.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1]: Chord: A scalable peer-to-peer lookup service for internet applications:
+	SIGCOMM '01 August 27-31,2001, San Diego, California, USA

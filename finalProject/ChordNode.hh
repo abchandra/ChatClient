@@ -29,7 +29,7 @@ Chordster
 #include <QVBoxLayout>
 #include <QListWidget>
 
-#define CHORD_BITS 5
+#define CHORD_BITS 15
 class Node
 {
 public:

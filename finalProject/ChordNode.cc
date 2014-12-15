@@ -78,10 +78,9 @@ ChordNode::ChordNode(bool x){
 		connect(connectdialog,SIGNAL(hostEntered(QString)),this,SLOT(handlehostEntered(QString)));
 		connectdialog->exec();
 	}
-	// sendJoinRequest(QHostAddress( "128.36.232.42" ),45516);
 	// printTimer=new QTimer(this);
 	// connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
-	// printTimer->start(5000);
+	// printTimer->start(1000);
 
 
 	stabilityTimer=new QTimer(this);
