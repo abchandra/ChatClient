@@ -1,11 +1,8 @@
-/***********************************
+/* 
 Abhishek Chandra
-CPSC 426 lab1 
-09/12/2014
-
-A basic Peerster implementation
-************************************/
-
+Chordster
+15/12/2014
+*/
 #ifndef CHORDSTER_MAIN_HH
 #define CHORDSTER_MAIN_HH
 #include "NetSocket.hh"
@@ -65,7 +62,8 @@ class ChordNode : public QDialog
 	Q_OBJECT
 
 public:
-	ChordNode();
+	ChordNode(bool x);
+	bool hasjoinhost;
 
 public slots:
 	void gotNewMessage();					//Handles readyRead() for incoming datagrams
@@ -73,7 +71,9 @@ public slots:
 	void handleDownloadFile(quint32 key);
 	void handleDownloadButton();	//Generate dialog for requesting a download
 	void handleStabilityTimeout();
+	void handleshowfingerTable();
 	void printStatus();
+	void handlehostEntered(QString);
 private:
 	static const quint32 idlength = CHORD_BITS;
 	static const quint32 idSpaceSize = 1<<idlength;
@@ -83,13 +83,11 @@ private:
 	QVBoxLayout *layout1;					//Layout of GUI
 	QPushButton* sharefilebutton;	//Button to launch dialog for file sharing
 	QPushButton* downloadfilebutton;//Launch dialog for file download	
+	QPushButton* showFingerTablebutton;
 	DownloadFileDialog* sharedialog;
+	ConnectDialog* connectdialog;
 	QFileDialog* filedialog;
-/* 
-Abhishek Chandra
-Chordster
-15/12/2014
-*/
+	QLineEdit* hostline;
 
 	NetSocket sock;								//Netsocket instance to bind to a port
 	FileShareManager filemanager;

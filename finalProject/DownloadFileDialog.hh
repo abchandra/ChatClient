@@ -9,6 +9,7 @@ Chordster
 #include <QVBoxLayout>
 #include <QComboBox>
 #include <QPushButton>
+#include <QLineEdit>
 #include <QString>
 
 class DownloadFileDialog : public QDialog
@@ -29,3 +30,16 @@ signals:
 	void downloadfile(quint32);
 };
 
+class ConnectDialog : public QDialog
+{
+	Q_OBJECT
+	public:
+		ConnectDialog();
+		QVBoxLayout *layout;
+		QLineEdit* hostline;
+		QPushButton* reqbutton;
+	signals:
+		void hostEntered(QString);
+	public slots:
+	void handleRequestButton();
+};

@@ -8,7 +8,7 @@ Chordster
 #include <QApplication>
 #include <QDateTime>
 #include <QBitArray>
-
+#include <QMessageBox>
 #define NEIGHBOR_REQUEST_KEY "Neighbor_Request"
 #define NEIGHBOR_REPLY_KEY "Neighbor_Reply"
 #define PREDECESSOR_KEY "Predecessor" 
@@ -29,26 +29,25 @@ Chordster
 #define SENDKEY -3
 #define DOWNLOAD -4
 #define STABILITY -5
-ChordNode::ChordNode(){
+ChordNode::ChordNode(bool x){
+	hasjoinhost=x;
 	qRegisterMetaType<Node>();
 	qRegisterMetaTypeStreamOperators<Node>();
-	setWindowTitle("Chordster");
+	// setWindowTitle("Chordster");
 	hasjoined = false;
 	sharefilebutton = new QPushButton("Share file...",this);
 	downloadfilebutton = new QPushButton("Download file...",this);
-
+	showFingerTablebutton = new QPushButton("See finger table...",this);
 	//Make buttons not clickable on return Press
 	sharefilebutton->setAutoDefault(false);
 	downloadfilebutton->setAutoDefault(false);
+	showFingerTablebutton->setAutoDefault(false);
 
 	//Register callback on file share button to open file sharing dialog
 	connect(sharefilebutton,SIGNAL(released()),this,SLOT(handleShareFileButton()));
 	//Register callback on download file button to open file sharing dialog
 	connect(downloadfilebutton,SIGNAL(released()),this,SLOT(handleDownloadButton()));
-	layout1 = new QVBoxLayout();
-	layout1->addWidget(downloadfilebutton);
-	layout1->addWidget(sharefilebutton);
-	setLayout(layout1);
+
 	//Bind to a port
 	if (!(sock.bind()))
 		exit(1);
@@ -57,16 +56,31 @@ ChordNode::ChordNode(){
 		exit(1);
 	//initialize selfNode
 	setCreateSelfNode();
+
 	//initialize fingerTable with intervals
 	finger = new FingerTableEntry[idlength];
 	SetFingerTableIntervals();
+		//Register callback on download file button to open file sharing dialog
+	connect(showFingerTablebutton,SIGNAL(released()),this,SLOT(handleshowfingerTable()));
 	//Register a callback on NetSocket's readyRead signal to
 	//read pending datagrams.
 	connect(&sock, SIGNAL(readyRead()),this, SLOT(gotNewMessage()));
-	qDebug()<<"Connected:"<<selfNode->address<<selfNode->port<<"Key:"<<selfNode->key;
-	sendJoinRequest(QHostAddress( "128.36.232.25" ),45516);
-	printTimer=new QTimer(this);
-	connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
+	qDebug()<<"I am"<<selfNode->address<<selfNode->port<<" with key:"<<selfNode->key;
+
+	layout1 = new QVBoxLayout();
+	layout1->addWidget(downloadfilebutton);
+	layout1->addWidget(sharefilebutton);
+	layout1->addWidget(showFingerTablebutton);
+	setWindowTitle("Chordster: "+QString::number(selfNode->key));
+	setLayout(layout1);
+	if (!hasjoinhost){
+		connectdialog = new ConnectDialog();
+		connect(connectdialog,SIGNAL(hostEntered(QString)),this,SLOT(handlehostEntered(QString)));
+		connectdialog->exec();
+	}
+	// sendJoinRequest(QHostAddress( "128.36.232.42" ),45516);
+	// printTimer=new QTimer(this);
+	// connect(printTimer,SIGNAL(timeout()),this,SLOT(printStatus()));
 	// printTimer->start(5000);
 
 
@@ -74,6 +88,7 @@ ChordNode::ChordNode(){
 	connect(stabilityTimer,SIGNAL(timeout()),this,SLOT(handleStabilityTimeout()));
 	stabilityTimer->start(10000);
 }
+
 QDataStream& operator<<(QDataStream &out, const Node &n){
 	out<<n.key<<n.address<<n.port;
 	return out;
@@ -81,6 +96,55 @@ QDataStream& operator<<(QDataStream &out, const Node &n){
 QDataStream& operator>>(QDataStream &in, Node &n){
 	in>>n.key>>n.address>>n.port;
 	return in;
+}
+
+void ChordNode::handlehostEntered(QString hostport){
+	if (hostport==""){
+		if (hasjoinhost)
+			return;
+		connectdialog->close();
+		delete connectdialog;
+		qDebug()<<"Starting new Chord Circle";
+		return;
+	}
+
+	QStringList splitlist = hostport.split(":");	//"host:port"|"ipadd:port"
+	if (splitlist.size()!=2){												//Check Format
+		qDebug()<<"Invalid format. Use ip:port";
+		return;
+	}
+	bool isokay;
+	quint16 newPort = splitlist[1].toUInt(&isokay);				
+	if (!isokay){																	//Check for conversion errors
+		qDebug()<<"Invalid format. Port is not numeric";
+		return;
+	}
+	if(QHostAddress(splitlist[0]).isNull()){
+		qDebug()<<"Please provide a valid ip!";
+		return;
+	}
+	
+	sendJoinRequest(QHostAddress(splitlist[0]),newPort);
+	if (!hasjoinhost){
+		connectdialog->close();
+		delete connectdialog;
+		hasjoinhost=true;
+	}
+}
+
+void ChordNode::handleshowfingerTable(){
+	QString text;
+	text ="Our Key: "+ QString::number(selfNode->key) + "\n";
+	text+="Our Successor: "+ QString::number(successor.key) + "\n";
+	text+="Our Predecessor: "+ QString::number(predecessor.key) + "\n";
+	text+="FINGER TABLE:\n";
+	for(uint i=0;i<idlength;++i){
+	 text+="[" + QString::number(finger[i].start) + "," + QString::number(finger[i].end) + "):"
+	  + QString::number(finger[i].node.key) + "\n";
+	}
+	QMessageBox msgBox;
+	msgBox.setText(text);
+	msgBox.exec();
 }
 
 void ChordNode::handleStabilityTimeout(){
